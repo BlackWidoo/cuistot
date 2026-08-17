@@ -16,6 +16,10 @@
   --radius:20px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* Garantit que l'attribut HTML "hidden" est toujours respecté, même si un
+   composant définit ensuite sa propre règle "display" (sinon l'élément reste
+   affiché malgré "hidden" et peut bloquer les clics sur toute la page). */
+[hidden]{display:none!important}
 html,body{height:100%}
 body{
   font-family:'Nunito',system-ui,sans-serif;
@@ -37,8 +41,11 @@ img{max-width:100%}
 /* ---------- Top bar ---------- */
 .topbar{
   position:sticky;top:0;z-index:40;
-  background:rgba(255,248,240,.92);backdrop-filter:blur(10px);
+  background:rgba(255,248,240,.98);
   border-bottom:1px solid var(--line);
+}
+@supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
+  .topbar{background:rgba(255,248,240,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 }
 .topbar-inner{max-width:640px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .logo{font-family:'Fraunces';font-weight:700;font-size:1.5rem;color:var(--terracotta);display:flex;align-items:center;gap:6px}
@@ -55,9 +62,12 @@ img{max-width:100%}
 /* ---------- Bottom nav ---------- */
 .bottomnav{
   position:fixed;bottom:0;left:0;right:0;z-index:50;
-  background:rgba(255,255,255,.96);backdrop-filter:blur(12px);
+  background:rgba(255,255,255,.99);
   border-top:1px solid var(--line);
   box-shadow:0 -4px 24px rgba(160,90,50,.08);
+}
+@supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
+  .bottomnav{background:rgba(255,255,255,.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 }
 .bottomnav-inner{max-width:640px;margin:0 auto;display:flex;justify-content:space-around;align-items:center;padding:8px 6px 10px}
 .nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:700;color:var(--ink-soft);padding:4px 8px;border-radius:12px;transition:.2s}
