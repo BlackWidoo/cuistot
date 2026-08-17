@@ -55,14 +55,14 @@ const FOOD_EMOJIS = ['🍽️','🍲','🍝','🍜','🥗','🍛','🍕','🌮',
 
 /* ---------- Ambiance visuelle par catégorie (covers premium) ---------- */
 const CAT_GRAD = {
-  'Entrée':     'linear-gradient(135deg,#ffe1b8,#ffcf8f)',
-  'Plat':       'linear-gradient(135deg,#ffd9b3,#ff9e7a)',
-  'Dessert':    'linear-gradient(135deg,#ffd6e0,#f7a8c4)',
-  'Petit-déj':  'linear-gradient(135deg,#fff0c2,#ffd98a)',
-  'Végétarien': 'linear-gradient(135deg,#d6efc0,#a9d98a)',
-  'Healthy':    'linear-gradient(135deg,#c8ecd9,#8fd6b4)',
-  'Boisson':    'linear-gradient(135deg,#cfe6ff,#a7c9f5)',
-  'Autre':      'linear-gradient(135deg,#ffe6cc,#ffd9c0)',
+  'Entrée':     'linear-gradient(135deg,#f0d3ac,#e2b98c)',
+  'Plat':       'linear-gradient(135deg,#e8c6a8,#d99e7c)',
+  'Dessert':    'linear-gradient(135deg,#e8cdd3,#d6a9b8)',
+  'Petit-déj':  'linear-gradient(135deg,#ecdfb8,#ddc386)',
+  'Végétarien': 'linear-gradient(135deg,#d6dfc4,#b3c99a)',
+  'Healthy':    'linear-gradient(135deg,#cbdfd2,#a4c7b2)',
+  'Boisson':    'linear-gradient(135deg,#cddae6,#aec2d6)',
+  'Autre':      'linear-gradient(135deg,#e8dccb,#d9c3a8)',
 };
 const coverStyle = (cat) => `background:${CAT_GRAD[cat] || CAT_GRAD['Autre']}`;
 
@@ -101,53 +101,6 @@ function skeletonCards(n = 3) {
   return s + '</div>';
 }
 
-/* ---------- Cœur qui « explose » au like ---------- */
-function heartBurst(x, y) {
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) return;
-  const hearts = ['❤️', '💛', '🧡', '✨'];
-  for (let i = 0; i < 8; i++) {
-    const s = document.createElement('span');
-    s.className = 'burst';
-    s.textContent = hearts[i % hearts.length];
-    const ang = (Math.PI * 2 * i) / 8 + Math.random();
-    const dist = 34 + Math.random() * 26;
-    s.style.left = x + 'px'; s.style.top = y + 'px';
-    s.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
-    s.style.setProperty('--dy', (Math.sin(ang) * dist - 20) + 'px');
-    document.body.appendChild(s);
-    setTimeout(() => s.remove(), 750);
-  }
-}
-
-/* ---------- Pluie de confettis (récompense débloquée) ---------- */
-function confetti() {
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) return;
-  const colors = ['#d1603d', '#e5a54b', '#7a8450', '#f7a8c4', '#ffd98a'];
-  for (let i = 0; i < 60; i++) {
-    const c = document.createElement('div');
-    c.className = 'confetti';
-    c.style.left = Math.random() * 100 + 'vw';
-    c.style.background = colors[i % colors.length];
-    c.style.setProperty('--dur', (1.6 + Math.random() * 1.4) + 's');
-    c.style.animationDelay = Math.random() * 0.4 + 's';
-    c.style.transform = `rotate(${Math.random() * 360}deg)`;
-    document.body.appendChild(c);
-    setTimeout(() => c.remove(), 3600);
-  }
-}
-
-/* ---------- Compteur animé ---------- */
-function countUp(el, from, to, ms = 700) {
-  if (from === to) { el.textContent = `✨ ${to} pts`; return; }
-  const start = performance.now();
-  const step = (now) => {
-    const p = Math.min(1, (now - start) / ms);
-    const eased = 1 - Math.pow(1 - p, 3);
-    el.textContent = `✨ ${Math.round(from + (to - from) * eased)} pts`;
-    if (p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
 
 /* ============================================================
    AUTH SCREEN
@@ -158,7 +111,7 @@ function renderAuth(tab = 'login') {
       <div class="auth-hero">
         <div class="big">🍳</div>
         <h1>Cuistot</h1>
-        <p>Le réseau social des gourmands. Partage tes recettes, gagne des points, régale la communauté.</p>
+        <p>Le réseau social des gourmands. Partage tes recettes, gagne des points, échange avec la communauté.</p>
       </div>
       <div class="auth-card">
         <div class="tabs">
@@ -170,9 +123,9 @@ function renderAuth(tab = 'login') {
             <div class="field"><label>Pseudo</label><input name="username" required placeholder="chef_du_dimanche" autocomplete="username"></div>` : ''}
           <div class="field"><label>Email ${tab==='login'?'ou pseudo':''}</label><input name="email" required placeholder="toi@exemple.fr" autocomplete="email"></div>
           <div class="field"><label>Mot de passe</label><input name="password" type="password" required placeholder="••••••" autocomplete="current-password"></div>
-          <button class="btn" type="submit">${tab==='login'?'Se connecter':'Créer mon compte'} 🍴</button>
+          <button class="btn" type="submit">${tab==='login'?'Se connecter':'Créer mon compte'}</button>
         </form>
-        <div class="demo-hint">👋 Essai rapide : <b>demo@cuistot.fr</b> / <b>demo123</b></div>
+        <div class="demo-hint">Essai rapide : <b>demo@cuistot.fr</b> / <b>demo123</b></div>
       </div>
     </div>`;
 
@@ -190,12 +143,12 @@ function renderAuth(tab = 'login') {
       App.state.user = data.user;
       localStorage.setItem('cuistot_token', data.token);
       await refreshMe();
-      toast('Bienvenue ' + data.user.username + ' ! 🎉', true);
+      toast('Bienvenue ' + data.user.username, true);
       go('feed');
     } catch (err) {
       toast(err.message);
       btn.disabled = false;
-      btn.textContent = tab === 'login' ? 'Se connecter 🍴' : 'Créer mon compte 🍴';
+      btn.textContent = tab === 'login' ? 'Se connecter' : 'Créer mon compte';
     }
   };
 }
@@ -216,7 +169,7 @@ function shell(content) {
     <header class="topbar"><div class="topbar-inner">
       <div class="logo"><span class="dot">🍳</span>Cuistot</div>
       <div class="spacer"></div>
-      <button class="points-pill" data-go="rewards">✨ ${u.points} pts</button>
+      <button class="points-pill" data-go="rewards">${u.points} pts</button>
       <button class="bell-btn" data-go="notifications">🔔<span class="bell-badge" id="bellBadge" hidden>0</span></button>
       <button class="avatar-btn" data-go="profile">${u.avatar}</button>
     </div></header>
@@ -303,11 +256,6 @@ function wireRecipeCards(root) {
       const d = await api(`/recipes/${e.dataset.like}/like`, { method: 'POST' });
       e.classList.toggle('liked', d.liked);
       e.innerHTML = `<span class="ic">${d.liked?'❤️':'🤍'}</span> ${d.likes}`;
-      if (d.liked) {
-        e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop');
-        const rect = e.querySelector('.ic').getBoundingClientRect();
-        heartBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      }
       await refreshPoints();
     } catch (err) { toast(err.message); }
   });
@@ -317,7 +265,7 @@ function wireRecipeCards(root) {
       const d = await api(`/recipes/${e.dataset.bm}/bookmark`, { method: 'POST' });
       e.classList.toggle('saved', d.bookmarked);
       e.innerHTML = `<span class="ic">${d.bookmarked?'🔖':'📑'}</span> ${d.bookmarked?'Enregistré':'Enregistrer'}`;
-      toast(d.bookmarked ? 'Ajouté à tes favoris 🔖' : 'Retiré des favoris');
+      toast(d.bookmarked ? 'Ajouté à tes favoris' : 'Retiré des favoris');
     } catch (err) { toast(err.message); }
   });
 }
@@ -325,14 +273,10 @@ function wireRecipeCards(root) {
 async function refreshPoints() {
   try {
     const me = await api('/me');
-    const old = App.state.user.points;
     App.state.user.points = me.user.points;
     const pill = document.querySelector('.points-pill');
     if (pill && pill.classList.contains('points-pill')) {
-      if (me.user.points !== old) {
-        countUp(pill, old, me.user.points);
-        pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump');
-      }
+      pill.textContent = `${me.user.points} pts`;
     }
   } catch {}
 }
@@ -342,11 +286,11 @@ async function refreshPoints() {
    ============================================================ */
 async function viewFeed(mode = 'all') {
   shell(`
-    <div class="section-title serif">🍳 Le fil gourmand</div>
+    <div class="section-title serif">Le fil gourmand</div>
     <div class="chips" id="feedChips">
-      <button class="chip ${mode==='all'?'active':''}" data-mode="all">🌍 Découverte</button>
-      <button class="chip ${mode==='feed'?'active':''}" data-mode="feed">👥 Mes abonnements</button>
-      <button class="chip ${mode==='popular'?'active':''}" data-mode="popular">🔥 Populaires</button>
+      <button class="chip ${mode==='all'?'active':''}" data-mode="all">Découverte</button>
+      <button class="chip ${mode==='feed'?'active':''}" data-mode="feed">Mes abonnements</button>
+      <button class="chip ${mode==='popular'?'active':''}" data-mode="popular">Populaires</button>
     </div>
     <div id="feedList">${skeletonCards(3)}</div>`);
 
@@ -360,7 +304,7 @@ async function viewFeed(mode = 'all') {
     const list = document.getElementById('feedList');
     if (!recipes.length) {
       list.innerHTML = mode === 'feed'
-        ? `<div class="empty"><div class="big">🍽️</div><p>Suis des chefs pour voir leurs recettes ici !</p></div>`
+        ? `<div class="empty"><div class="big">🍽️</div><p>Suis des chefs pour voir leurs recettes ici.</p></div>`
         : `<div class="empty"><div class="big">🍽️</div><p>Aucune recette pour l'instant.</p></div>`;
       return;
     }
@@ -374,7 +318,7 @@ async function viewFeed(mode = 'all') {
    ============================================================ */
 async function viewDiscover(preset = '') {
   shell(`
-    <div class="section-title serif">🔍 Découvrir</div>
+    <div class="section-title serif">Découvrir</div>
     <div class="searchbar">
       <span>🔎</span>
       <input id="searchInput" placeholder="Recette, ingrédient, tag…" value="${esc(preset)}">
@@ -382,7 +326,7 @@ async function viewDiscover(preset = '') {
     <div class="chips" id="catChips">
       ${CATEGORIES.map(c=>`<button class="chip ${c==='Tout'?'active':''}" data-cat="${c}">${c}</button>`).join('')}
     </div>
-    <button class="chip" data-go="leaderboard" style="margin:2px 0 10px">🏅 Voir le classement des chefs</button>
+    <button class="chip" data-go="leaderboard" style="margin:2px 0 10px">Voir le classement des chefs</button>
     <div id="discoverList"></div>`);
 
   let cat = 'Tout', q = preset;
@@ -396,7 +340,7 @@ async function viewDiscover(preset = '') {
       const { recipes } = await api(path);
       list.innerHTML = recipes.length
         ? recipes.map(recipeCard).join('')
-        : `<div class="empty"><div class="big">🤷</div><p>Rien trouvé. Essaie un autre mot-clé !</p></div>`;
+        : `<div class="empty"><div class="big">🤷</div><p>Rien trouvé. Essaie un autre mot-clé.</p></div>`;
       wireRecipeCards(list);
     } catch (err) { toast(err.message); }
   };
@@ -420,7 +364,7 @@ async function viewCreate(edit) {
   const sel = (v, cur) => v === cur ? ' selected' : '';
   App.state.view = 'create';
   shell(`
-    <div class="section-title serif">${isEdit?'✏️ Modifier la recette':'➕ Nouvelle recette'}</div>
+    <div class="section-title serif">${isEdit?'Modifier la recette':'Nouvelle recette'}</div>
     <div class="card" style="padding:18px">
       <form id="recipeForm">
         <div class="field"><label>Titre du plat</label><input name="title" required placeholder="Ex : Tarte aux pommes de mamie" value="${isEdit?esc(edit.title):''}"></div>
@@ -462,7 +406,7 @@ async function viewCreate(edit) {
         </div>
         <div class="field"><label>Tags (séparés par des virgules)</label>
           <input name="tags" placeholder="ex : végétarien, rapide, chocolat" value="${isEdit?esc((edit.tags||[]).join(', ')):''}"></div>
-        <button class="btn" type="submit">${isEdit?'💾 Enregistrer les modifications':'Publier ma recette 🍴 <span style="opacity:.85">(+25 pts)</span>'}</button>
+        <button class="btn" type="submit">${isEdit?'Enregistrer les modifications':'Publier ma recette <span style="opacity:.85">(+25 pts)</span>'}</button>
       </form>
     </div>`);
 
@@ -539,15 +483,15 @@ async function viewCreate(edit) {
     try {
       if (isEdit) {
         await api(`/recipes/${edit.id}`, { method: 'PUT', body });
-        toast('Recette mise à jour ✅', true);
+        toast('Recette mise à jour', true);
         go('recipe', edit.id);
       } else {
         await api('/recipes', { method: 'POST', body });
         await refreshMe();
-        toast('Recette publiée ! +25 points 🎉', true);
+        toast('Recette publiée · +25 points', true);
         go('feed');
       }
-    } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = isEdit ? '💾 Enregistrer' : 'Publier ma recette 🍴'; }
+    } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = isEdit ? 'Enregistrer' : 'Publier ma recette'; }
   };
 }
 
@@ -577,20 +521,20 @@ async function viewRecipe(id) {
           ${r.tags.length?`<div class="tags" style="margin-top:10px">${r.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:''}
           <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
             <button class="btn ${r.liked?'gold':''} small" id="likeBtn">${r.liked?'❤️ Aimé':'🤍 J\'aime'} · ${r.likes}</button>
-            <button class="btn ghost small" id="bmBtn">${r.bookmarked?'🔖 Enregistré':'📑 Enregistrer'}</button>
+            <button class="btn ghost small" id="bmBtn">${r.bookmarked?'Enregistré':'Enregistrer'}</button>
           </div>
           ${r.is_mine?`<div style="display:flex;gap:10px;margin-top:10px">
-            <button class="btn ghost small" id="editBtn">✏️ Modifier</button>
-            <button class="btn ghost small" id="delBtn" style="border-color:var(--terracotta);color:var(--terracotta)">🗑 Supprimer</button>
+            <button class="btn ghost small" id="editBtn">Modifier</button>
+            <button class="btn ghost small" id="delBtn" style="border-color:var(--terracotta);color:var(--terracotta)">Supprimer</button>
           </div>`:''}
 
-          <div class="detail-section"><h3 class="serif">🧺 Ingrédients</h3>
+          <div class="detail-section"><h3 class="serif">Ingrédients</h3>
             <ul class="ing-list">${r.ingredients.map(i=>`<li>${esc(i)}</li>`).join('') || '<li class="muted">Non précisé</li>'}</ul></div>
-          <div class="detail-section"><h3 class="serif">👩‍🍳 Préparation</h3>
+          <div class="detail-section"><h3 class="serif">Préparation</h3>
             <ol class="step-list">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('') || '<li class="muted">Non précisé</li>'}</ol></div>
 
           <div class="detail-section"><h3 class="serif">💬 Commentaires (${r.commentList.length})</h3>
-            <div id="commentList">${r.commentList.map(commentHtml).join('') || '<p class="muted">Sois le premier à commenter !</p>'}</div>
+            <div id="commentList">${r.commentList.map(commentHtml).join('') || '<p class="muted">Sois le premier à commenter.</p>'}</div>
             <form class="comment-form" id="commentForm">
               <input name="body" placeholder="Ton avis gourmand…" required>
               <button class="btn small" type="submit">Envoyer</button>
@@ -608,14 +552,13 @@ async function viewRecipe(id) {
       const b = document.getElementById('likeBtn');
       b.className = 'btn small ' + (d.liked ? 'gold' : '');
       b.innerHTML = (d.liked ? '❤️ Aimé' : '🤍 J\'aime') + ' · ' + d.likes;
-      if (d.liked) { const rect = b.getBoundingClientRect(); heartBurst(rect.left + rect.width / 2, rect.top + rect.height / 2); }
       await refreshPoints();
     };
 
     document.getElementById('bmBtn').onclick = async () => {
       const d = await api(`/recipes/${id}/bookmark`, { method: 'POST' });
-      document.getElementById('bmBtn').innerHTML = d.bookmarked ? '🔖 Enregistré' : '📑 Enregistrer';
-      toast(d.bookmarked ? 'Ajouté à ton carnet 🔖' : 'Retiré du carnet');
+      document.getElementById('bmBtn').innerHTML = d.bookmarked ? 'Enregistré' : 'Enregistrer';
+      toast(d.bookmarked ? 'Ajouté à ton carnet' : 'Retiré du carnet');
     };
 
     if (r.is_mine) {
@@ -659,9 +602,9 @@ function commentHtml(c) {
    ============================================================ */
 async function viewChallenges() {
   shell(`
-    <div class="section-title serif">🏆 Défis cuisine</div>
-    <p class="muted" style="margin-bottom:14px">Publie une recette qui correspond au thème pour valider un défi et empocher des points bonus !</p>
-    <div id="chList"><div class="skeleton">Chargement… 🏆</div></div>`);
+    <div class="section-title serif">Défis cuisine</div>
+    <p class="muted" style="margin-bottom:14px">Publie une recette qui correspond au thème pour valider un défi et empocher des points bonus.</p>
+    <div id="chList"><div class="skeleton">Chargement…</div></div>`);
   try {
     const { challenges } = await api('/challenges');
     document.getElementById('chList').innerHTML = challenges.map((ch) => `
@@ -677,14 +620,14 @@ async function viewChallenges() {
           <span class="reward-pts">+${ch.reward_pts} pts</span>
           ${ch.joined
             ? `<span class="joined-badge">✅ Validé</span>`
-            : `<button class="btn tiny gold" data-tag="${esc(ch.tag)}">🍳 Participer</button>`}
+            : `<button class="btn tiny gold" data-tag="${esc(ch.tag)}">Participer</button>`}
         </div>
         <div class="muted" style="font-size:.78rem;margin-top:8px">
           👥 ${ch.participants} participant${ch.participants>1?'s':''} · Se termine le ${new Date(ch.ends_at).toLocaleDateString('fr-FR',{day:'numeric',month:'long'})}
         </div>
       </article>`).join('');
     document.querySelectorAll('[data-tag]').forEach((b) => b.onclick = () => {
-      toast('Publie une recette avec le tag « ' + b.dataset.tag + ' » pour valider 🍴');
+      toast('Publie une recette avec le tag « ' + b.dataset.tag + ' » pour valider');
       go('create');
     });
   } catch (err) { toast(err.message); }
@@ -696,13 +639,13 @@ async function viewChallenges() {
 async function viewRewards() {
   App.state.view = 'rewards';
   shell(`
-    <div class="section-title serif">🎁 Boutique</div>
+    <div class="section-title serif">Boutique</div>
     <div class="level-card" style="margin:0 0 16px">
-      <div class="level-top"><span class="level-name">✨ Ton solde</span>
+      <div class="level-top"><span class="level-name">Ton solde</span>
         <span class="points-pill">${App.state.user.points} pts</span></div>
       <p class="muted" style="font-size:.85rem">Gagne des points en publiant, en likant et en relevant des défis, puis échange-les ici.</p>
     </div>
-    <div id="rewardList"><div class="skeleton">Chargement… 🎁</div></div>
+    <div id="rewardList">${skeletonCards(2)}</div>
     <div id="redeemed"></div>`);
   try {
     const { rewards, redeemed } = await api('/rewards');
@@ -712,7 +655,7 @@ async function viewRewards() {
       return `<article class="card reward">
         <div class="ric">${r.icon}</div>
         <div class="rinfo"><h4>${esc(r.title)}</h4><p>${esc(r.description)}</p>
-          <span class="cost-pill">✨ ${r.cost} pts</span>
+          <span class="cost-pill">${r.cost} pts</span>
           ${r.stock>0?`<span class="cost-pill" style="background:var(--cream);color:var(--ink-soft)">Stock : ${r.stock}</span>`:''}
         </div>
         <button class="btn small ${afford&&!out?'gold':''}" data-redeem="${r.id}" ${afford&&!out?'':'disabled'}>
@@ -724,17 +667,16 @@ async function viewRewards() {
       try {
         const d = await api(`/rewards/${b.dataset.redeem}/redeem`, { method: 'POST' });
         App.state.user.points = d.points;
-        haptic(30); confetti();
-        showModal(`<div class="mic">🎉</div><h3 class="serif">Récompense débloquée !</h3>
+        showModal(`<div class="mic">🎁</div><h3 class="serif">Récompense débloquée</h3>
           <p class="muted">Voici ton code à conserver :</p>
           <div class="code">${d.code}</div>
-          <button class="btn" onclick="document.getElementById('modal').hidden=true">Super !</button>`);
+          <button class="btn" onclick="document.getElementById('modal').hidden=true">Fermer</button>`);
         viewRewards();
       } catch (err) { toast(err.message); }
     });
 
     document.getElementById('redeemed').innerHTML = redeemed.length ? `
-      <div class="section-title serif" style="font-size:1.2rem">🎟 Mes récompenses</div>
+      <div class="section-title serif" style="font-size:1.2rem">Mes récompenses</div>
       ${redeemed.map((r) => `<div class="card reward"><div class="ric">${r.icon}</div>
         <div class="rinfo"><h4>${esc(r.title)}</h4>
         <span class="cost-pill" style="background:var(--bg-warm);color:var(--terracotta)">Code : ${esc(r.code)}</span></div></div>`).join('')}` : '';
@@ -779,16 +721,16 @@ function renderProfile(user, badges, extra, isSelf) {
 
     <div class="level-card">
       <div class="level-top">
-        <span class="level-name">🎖 Niveau ${lvl.level} · ${lvl.name}</span>
+        <span class="level-name">Niveau ${lvl.level} · ${lvl.name}</span>
         <span class="points-pill">${user.points} pts</span>
       </div>
       <div class="level-bar"><i style="width:${lvl.progress}%"></i></div>
       <div class="level-sub">${lvl.next
-        ? `Encore ${lvl.next.min - user.points} pts pour devenir « ${lvl.next.name} » 🚀`
-        : 'Niveau maximum atteint — quel chef ! 👑'}</div>
+        ? `Encore ${lvl.next.min - user.points} pts pour devenir « ${lvl.next.name} »`
+        : 'Niveau maximum atteint.'}</div>
     </div>
 
-    <div class="section-title serif" style="font-size:1.3rem">🏅 Badges</div>
+    <div class="section-title serif" style="font-size:1.3rem">Badges</div>
     <div class="badge-grid">
       ${badges.map((b) => `<div class="badge ${b.unlocked?'on':''}" title="${esc(b.desc)}">
         <div class="ic">${b.icon}</div><div class="nm">${esc(b.name)}</div></div>`).join('')}
@@ -796,13 +738,13 @@ function renderProfile(user, badges, extra, isSelf) {
 
     ${isSelf?`
       <div style="display:grid;gap:10px;margin-top:16px">
-        <button class="btn ghost small" data-go="bookmarks">🔖 Mon carnet de recettes</button>
-        <button class="btn ghost small" id="histBtn">📜 Mon historique de points</button>
-        <button class="btn ghost small" id="themeBtn">🌙 Basculer en mode sombre</button>
+        <button class="btn ghost small" data-go="bookmarks">Mon carnet de recettes</button>
+        <button class="btn ghost small" id="histBtn">Mon historique de points</button>
+        <button class="btn ghost small" id="themeBtn">Basculer en mode sombre</button>
         <button class="btn ghost small" id="logout2" style="border-color:var(--ink-soft);color:var(--ink-soft)">Se déconnecter</button>
       </div>`:''}
 
-    <div class="section-title serif" style="font-size:1.3rem">${isSelf?'🍳 Mes recettes':'🍳 Ses recettes'}</div>
+    <div class="section-title serif" style="font-size:1.3rem">${isSelf?'Mes recettes':'Ses recettes'}</div>
     <div id="userRecipes">${skeletonCards(2)}</div>`);
 
   if (isSelf) {
@@ -813,7 +755,7 @@ function renderProfile(user, badges, extra, isSelf) {
     };
     document.getElementById('histBtn').onclick = showHistory;
     const tb = document.getElementById('themeBtn');
-    tb.textContent = document.documentElement.dataset.theme === 'dark' ? '☀️ Basculer en mode clair' : '🌙 Basculer en mode sombre';
+    tb.textContent = document.documentElement.dataset.theme === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre';
     tb.onclick = toggleTheme;
   } else {
     document.getElementById('back').onclick = () => history.length > 1 ? go('feed') : go('feed');
@@ -822,7 +764,7 @@ function renderProfile(user, badges, extra, isSelf) {
       const b = document.getElementById('followBtn');
       b.className = 'btn small ' + (d.following ? 'ghost' : '');
       b.textContent = d.following ? '✓ Abonné' : '+ Suivre ce chef';
-      toast(d.following ? 'Tu suis maintenant ' + user.username + ' 👥' : 'Désabonné');
+      toast(d.following ? 'Tu suis maintenant ' + user.username : 'Désabonné');
     };
   }
 
@@ -858,7 +800,7 @@ async function viewLeaderboard() {
   App.state.view = 'discover';
   shell(`
     <button class="back-btn" id="back">← Retour</button>
-    <div class="section-title serif">🏅 Classement des chefs</div>
+    <div class="section-title serif">Classement des chefs</div>
     <div class="card" id="lb"><div class="skeleton">Chargement…</div></div>`);
   document.getElementById('back').onclick = () => go('discover');
   try {
@@ -881,7 +823,7 @@ const NOTIF_ICON = { like: '❤️', comment: '💬', follow: '👥', challenge:
 async function viewNotifications() {
   App.state.view = '';
   shell(`
-    <div class="section-title serif">🔔 Notifications</div>
+    <div class="section-title serif">Notifications</div>
     <div id="notifList"><div class="skeleton">Chargement…</div></div>`);
   try {
     const { notifications } = await api('/notifications');
@@ -893,7 +835,7 @@ async function viewNotifications() {
           <div class="when">${timeAgo(n.created_at)}</div></div>
         ${n.is_read?'':'<span class="notif-dot"></span>'}
       </div>`).join('')
-      : `<div class="empty"><div class="big">🔕</div><p>Aucune notification pour l'instant.<br>Publie, like et échange pour animer la communauté !</p></div>`;
+      : `<div class="empty"><div class="big">🔕</div><p>Aucune notification pour l'instant.<br>Publie, like et échange pour animer la communauté.</p></div>`;
     list.querySelectorAll('[data-open]').forEach((e) => e.onclick = () => go('recipe', e.dataset.open));
     // Marque tout comme lu
     await api('/notifications/read', { method: 'POST' });
@@ -908,7 +850,7 @@ async function viewBookmarks() {
   App.state.view = '';
   shell(`
     <button class="back-btn" id="back">← Retour</button>
-    <div class="section-title serif">🔖 Mon carnet de recettes</div>
+    <div class="section-title serif">Mon carnet de recettes</div>
     <p class="muted" style="margin-bottom:12px">Les recettes que tu as enregistrées pour les cuisiner plus tard.</p>
     <div id="bmList">${skeletonCards(2)}</div>`);
   document.getElementById('back').onclick = () => go('profile');
@@ -933,9 +875,9 @@ function toggleTheme() {
   const next = dark ? 'light' : 'dark';
   applyTheme(next);
   localStorage.setItem('cuistot_theme', next);
-  toast(next === 'dark' ? 'Mode sombre activé 🌙' : 'Mode clair activé ☀️');
+  toast(next === 'dark' ? 'Mode sombre activé' : 'Mode clair activé');
   const tb = document.getElementById('themeBtn');
-  if (tb) tb.textContent = next === 'dark' ? '☀️ Basculer en mode clair' : '🌙 Basculer en mode sombre';
+  if (tb) tb.textContent = next === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre';
 }
 applyTheme(localStorage.getItem('cuistot_theme') || 'light');
 
