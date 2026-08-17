@@ -1,0 +1,7 @@
+node_modules/
+cuistot.db
+cuistot.db-wal
+cuistot.db-shm
+cuistot.db-journal
+*.log
+.env

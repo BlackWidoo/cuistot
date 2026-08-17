@@ -1,0 +1,13 @@
+# Configuration Render — déploiement automatique
+# (Render lit ce fichier tout seul lors d'un « Blueprint », mais tu peux aussi
+#  créer le service à la main : Build = npm install, Start = npm start)
+services:
+  - type: web
+    name: cuistot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true   # Render génère un secret sûr automatiquement

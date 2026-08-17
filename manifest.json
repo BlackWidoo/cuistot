@@ -1,0 +1,13 @@
+{
+  "name": "Cuistot — le réseau des gourmands",
+  "short_name": "Cuistot",
+  "description": "Partage tes recettes, gagne des points, régale la communauté.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8f0",
+  "theme_color": "#d1603d",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
