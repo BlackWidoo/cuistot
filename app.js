@@ -26,7 +26,13 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Erreur');
+  if (!res.ok) {
+    // En cas d'erreur de validation, le serveur renvoie un message précis par champ
+    // (data.fields) en plus du message générique data.error — on préfère l'afficher,
+    // beaucoup plus utile que "Requête invalide" tout seul.
+    const msg = data.fields ? Object.values(data.fields).join(' · ') : (data.error || 'Erreur');
+    throw new Error(msg);
+  }
   return data;
 }
 
