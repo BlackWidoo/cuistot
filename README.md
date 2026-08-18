@@ -15,7 +15,11 @@ npm start               # http://localhost:3000
 
 ```bash
 npm test                # tests d'intégration (node:test), base SQLite en mémoire
-npm run verify           # vérif syntaxe (node --check) + tests, à lancer avant tout déploiement
+npm run check            # vérif syntaxe (node --check) sur tous les fichiers serveur
+npm run lint             # ESLint (variables non définies, code mort...)
+npm run format:check     # Prettier en mode vérification (rien n'est réécrit)
+npm run format           # Prettier en mode écriture (reformate les fichiers sur place)
+npm run verify           # enchaîne check + lint + format:check + test — à lancer avant tout déploiement
 ```
 
 ## Variables d'environnement
@@ -117,6 +121,129 @@ passer (syntaxe + tests). Sinon, teste directement sur Render après déploiemen
 - Bonus de connexion quotidien souple (pas de pénalité si la série casse).
 - Le solde de points ne descend jamais sous 0 (`award()` plafonne au niveau base de données).
 
+## Fonctionnalités produit (Lot 8)
+
+- **Macros & coût par portion** : calories, protéines/glucides/lipides/fibres, coût (€) —
+  tous optionnels, saisis à la création/édition, affichés sur la page détail s'ils sont
+  renseignés. Ce sont des valeurs **par portion**, elles ne changent pas quand on ajuste le
+  nombre de portions préparées (une portion reste une portion).
+- **Ingrédients structurés** : chaque ingrédient est `{ qty, unit, label }` (ex. 200 g de
+  farine) au lieu d'une ligne de texte libre. Les recettes créées avant ce lot gardent leurs
+  ingrédients en texte libre (affichés tels quels, non ajustables) — les deux formats
+  cohabitent dans une même recette sans problème.
+- **Portions ajustables** : un ajusteur (-/+) sur la page détail recalcule en direct les
+  quantités des ingrédients structurés (aucun appel serveur).
+- **Liste de courses** : depuis « Mon carnet de recettes », bouton qui agrège les ingrédients
+  de toutes les recettes enregistrées en une liste cochable groupée par recette. Purement
+  côté client (les ingrédients sont déjà chargés), coché/décoché conservé en `localStorage`.
+- **Brouillons** : une recette peut être enregistrée en brouillon (visible par son auteur
+  uniquement) puis publiée plus tard. Les points de publication (+25) et la validation des
+  défis ne se déclenchent qu'à la publication effective, jamais deux fois pour la même recette.
+- **Filtres** : temps de préparation max, difficulté, budget max par portion — sur la page
+  Découvrir, en plus de la recherche déjà existante (qui continue de fonctionner sur le
+  nouveau format d'ingrédients sans changement).
+- **Non fait dans ce lot** (comme convenu) : collections nommées (au-delà du carnet de
+  favoris existant), import de recette depuis une URL, filtre dédié régime/allergènes
+  (couvert pour l'instant par les tags libres type "végétarien").
+
+## Qualité & CI (Lot 10)
+
+- **ESLint** (`eslint.config.js`, format flat config ESLint 9+) : règles cœur uniquement (pas
+  de plugin externe), centrées sur les vraies fautes — variable non définie, redéclaration,
+  code mort — plutôt que sur le style, qui est du ressort de Prettier. Trois profils de
+  globals séparés : fichiers serveur (Node/CommonJS), `app.js` (navigateur), `sw.js` (service
+  worker).
+- **Prettier** (`.prettierrc.json`) : guillemets simples, point-virgules, indentation 2
+  espaces, largeur de ligne 100 — réglages choisis pour coller au style déjà utilisé dans le
+  code existant et minimiser le diff si `npm run format` est lancé un jour.
+- **EditorConfig** (`.editorconfig`) : indentation/fin de ligne/encodage cohérents entre
+  éditeurs, indépendamment d'ESLint/Prettier.
+- **GitHub Actions** (`.github/workflows/ci.yml`) : à chaque push/PR sur `main`, installe les
+  dépendances puis enchaîne lint → format:check → vérif syntaxe → tests. Aucun compte externe
+  requis (tourne sur le repo GitHub existant).
+- **Dependabot** (`.github/dependabot.yml`) : ouvre automatiquement des PR hebdomadaires pour
+  les mises à jour de dépendances npm et d'actions GitHub.
+- **Tests étendus** (`test/api.test.js`) : abonnement/désabonnement (points + notification),
+  lecture des notifications, validation automatique d'un défi à la publication (une seule
+  fois même en republiant sur le même tag), boutique de récompenses (points insuffisants,
+  échange réussi, stock épuisé refusé ensuite), limite de débit réellement déclenchée
+  (création de recette), déconnexion (session locale redevient anonyme).
+- **Non fait dans ce lot** : Playwright/tests end-to-end navigateur (nécessite un environnement
+  Node + navigateurs installés pour s'exécuter, indisponible ici — les tests d'intégration
+  `node:test` couvrent déjà l'essentiel du parcours API), environnement de *staging* dédié
+  (nécessiterait un second service Render).
+- **Point d'attention pour le premier passage en CI** : aucun de ces outils n'a pu être
+  exécuté dans cet environnement (pas de Node.js disponible ici). Il est possible que
+  `npm run lint` ou `npm run format:check` remontent des signalements sur du code jamais
+  passé à travers ces outils. C'est normal et attendu à l'adoption — corrige au fil de l'eau,
+  ou lance `npm run format` une fois pour tout reformater d'un coup (à committer séparément
+  pour garder un historique lisible).
+
+## Architecture (Lot 5)
+
+`server.js` faisait ~1000 lignes (toutes les routes, tous les schémas, toute la logique
+métier dans un seul fichier). Découpage par responsabilité, sans changer aucun comportement :
+
+```
+config.js         lecture de l'environnement (JWT_SECRET, IS_PROD, PORT, COOKIE_OPTS) — une fois
+bootstrap.js       seed initial + promotion admin, exécutés une fois au démarrage
+middleware/
+  errors.js         apiError, validate() (Zod), idParam
+  csrf.js           ensureCsrfCookie, csrfProtect
+  rateLimit.js       fabrique de limiteur + les 6 limiteurs utilisés par les routes
+  auth.js           sign(), auth(), requireAdmin
+  security.js        Helmet/CSP, Permissions-Policy
+  staticGuard.js      ne jamais exposer server.js/db.js/.env/*.db
+services/
+  recipes.js         shapeRecipe, decorateRecipe(s), sanitizeDishIcon/Photo, awardPublishRecipe
+  users.js           publicUser, sanitizeAvatar/Color, listes d'icônes/couleurs d'avatar
+  notifications.js    notify()
+  email.js           sendPasswordResetEmail (journalisée, voir Lot 3)
+schemas/            un fichier par domaine (auth, recipes, moderation) — validation Zod
+routes/             un routeur Express par domaine (health, auth, recipes, social,
+                    moderation, rewards, challenges, misc) — monté dans server.js
+server.js           composition root : assemble middlewares globaux + routers, ~70 lignes
+```
+
+**Pas de couche "repository"** séparée au-dessus de `db.js` (au-delà de ce que le brief
+appelle repositories) : better-sqlite3 est déjà une API synchrone simple (prepared
+statements), directement lisible dans chaque route/service. Ajouter une abstraction
+supplémentaire aurait multiplié le risque de bug dans cet environnement où rien ne peut être
+exécuté pour vérifier, sans bénéfice clair vu la taille du projet.
+
+**Vérification faite pour cette refonte** (à défaut de pouvoir exécuter quoi que ce soit) :
+inventaire complet des 35 routes de l'ancien `server.js` comparé une à une aux routeurs
+déplacés (aucune route oubliée, aucun chemin changé), relecture de chaque `require()` pour
+vérifier que les chemins relatifs et les exports correspondent, et vérification que l'ordre
+d'enregistrement des middlewares globaux (CSP, CSRF, garde-fou fichiers statiques,
+`express.static`) est resté strictement identique à l'original — cet ordre est significatif
+en Express (traité dans l'ordre d'enregistrement) et une inversion aurait pu ouvrir une faille
+silencieusement. Les tests existants (`test/api.test.js`, `test/gamification.test.js`) ne
+requièrent que `../server` et `../db`, tous deux inchangés dans leur contrat public — aucune
+modification de test nécessaire pour cette refonte.
+
+## Design / UX produit (Lot 6)
+
+- **Création guidée en étapes** : la page « Nouvelle recette » est maintenant un parcours en
+  4 étapes (L'essentiel → Ingrédients → Préparation → Nutrition/coût), avec indicateur de
+  progression et navigation Précédent/Suivant, au lieu d'un unique long formulaire. La
+  **modification** d'une recette existante garde le formulaire complet sur une seule page
+  (pas de parcours pas-à-pas pour une correction rapide). Implémentation à risque volontairement
+  limité : les champs, leurs `name`, et toute la logique de collecte/soumission restent
+  strictement identiques entre les deux modes — seul l'attribut `hidden` change sur les blocs
+  d'étape, ce qui ne retire rien de `FormData`.
+- **Onboarding léger** : 4 écrans montrés une seule fois, immédiatement après l'inscription
+  (jamais à la reconnexion, donc pas besoin de drapeau `localStorage`), avec un bouton
+  « Passer » toujours visible. Présente le parcours de création guidée, la découverte/le
+  filtrage, et le système de points.
+- **Page recette** : icônes ajoutées aux titres des sections (Ingrédients, Préparation,
+  Nutrition, Conservation) pour la cohérence visuelle avec la section Commentaires qui les
+  avait déjà.
+- **Non fait dans ce lot** : refonte plus large du design system (tokens de couleur/typo déjà
+  posés dès le début du projet, pas de dette majeure identifiée), tutoriel interactif avec
+  overlays pointant des éléments réels de l'interface (plus complexe, risque plus élevé sans
+  pouvoir tester dans un navigateur ici).
+
 ## Statut des lots (brief de mise en production)
 
 - [x] **Lot 0 — Débloquer le déploiement** : `JWT_SECRET` obligatoire en prod, écoute sur
@@ -133,10 +260,15 @@ passer (syntaxe + tests). Sinon, teste directement sur Render après déploiemen
 - [x] **Lot 4 — Sécurité applicative + modération/confidentialité** : Helmet/CSP, CSRF,
   validation Zod, anti-abus étendu, signalement/blocage/admin/suppression de
   compte/export/pages légales. Restent : CAPTCHA, Redis (voir détail ci-dessus).
+- [x] **Lot 8 — Fonctionnalités produit** : macros/coût, ingrédients structurés, portions
+  ajustables, liste de courses, brouillons, filtres. Reste : collections nommées.
 - [x] **Lot 9 — Gamification saine** : voir détail ci-dessus.
-- [ ] **Lots 5, 6, 7, 8, 10, 11** : refactor routes/services/repositories, design system,
-  PWA hors-ligne, fonctionnalités produit (macros, coût, liste de courses...), CI/tooling
-  qualité (ESLint/Prettier/GitHub Actions/Playwright), SEO/analytics.
+- [x] **Lot 10 — Qualité/CI** : ESLint, Prettier, EditorConfig, GitHub Actions, Dependabot,
+  tests étendus (voir détail ci-dessus). Reste : Playwright/E2E, staging dédié.
+- [x] **Lot 5 — Refonte architecture** : `server.js` découpé en `config/middleware/services/
+  schemas/routes` (voir détail ci-dessus), aucun changement de comportement.
+- [x] **Lot 6 — Design/UX produit** : voir détail ci-dessous.
+- [ ] **Lots 7, 11** : PWA hors-ligne, SEO/analytics.
 
 Chaque lot suivant sera livré avec son code, sa migration, ses tests et une note de
 déploiement dédiée — voir le brief pour le détail complet de chaque lot.

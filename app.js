@@ -90,6 +90,45 @@ function openReportModal(targetType, targetId) {
   };
 }
 
+// Onboarding léger (Lot 6) : 4 écrans montrés une seule fois juste après l'inscription
+// (jamais à la reconnexion), pour donner les repères essentiels sans bloquer l'accès à l'app —
+// "Passer" est toujours disponible. Réutilise la modale générique existante (showModal/
+// closeModal) plutôt qu'un nouveau système d'overlay, pour rester cohérent avec le reste de
+// l'app (signalement, confidentialité...).
+const ONBOARDING_SLIDES = [
+  { icon: 'pan', title: 'Bienvenue sur Cuistot !', text: 'Le réseau social des gourmands : partage tes recettes, découvre celles des autres, et gagne des points en cuisinant.' },
+  { icon: 'plus', title: 'Publie ta première recette', text: 'Le bouton + en bas te guide étape par étape : l\'essentiel, les ingrédients, la préparation, puis la nutrition (optionnelle). Tu peux aussi l\'enregistrer en brouillon pour la finir plus tard.' },
+  { icon: 'search', title: 'Découvre et échange', text: 'Filtre par temps, difficulté ou budget, suis les cuisiniers qui t\'inspirent, commente et mets des favoris dans ton carnet de recettes.' },
+  { icon: 'trophy', title: 'Gagne des points', text: 'Publier, recevoir des likes, commenter, relever des défis : tout ça rapporte des points à échanger contre des récompenses dans la boutique.' },
+];
+function openOnboarding() {
+  let step = 0;
+  const render = () => {
+    const s = ONBOARDING_SLIDES[step];
+    showModal(`
+      <div class="onb-modal">
+        <div class="onb-ic">${icon(s.icon)}</div>
+        <h3 class="serif">${esc(s.title)}</h3>
+        <p>${esc(s.text)}</p>
+        <div class="onb-dots">${ONBOARDING_SLIDES.map((_, i) => `<span class="${i===step?'active':''}"></span>`).join('')}</div>
+        <div class="onb-actions">
+          ${step > 0 ? `<button class="btn ghost" id="onbPrev">Précédent</button>` : ''}
+          <button class="btn" id="onbNext">${step === ONBOARDING_SLIDES.length - 1 ? 'C\'est parti !' : 'Suivant'}</button>
+        </div>
+        ${step < ONBOARDING_SLIDES.length - 1 ? `<div class="onb-skip"><button type="button" id="onbSkip">Passer</button></div>` : ''}
+      </div>`);
+    const prev = document.getElementById('onbPrev');
+    if (prev) prev.onclick = () => { step--; render(); };
+    document.getElementById('onbNext').onclick = () => {
+      if (step < ONBOARDING_SLIDES.length - 1) { step++; render(); }
+      else closeModal();
+    };
+    const skip = document.getElementById('onbSkip');
+    if (skip) skip.onclick = closeModal;
+  };
+  render();
+}
+
 const CATEGORIES = ['Tout', 'Entrée', 'Plat', 'Dessert', 'Petit-déj', 'Végétarien', 'Healthy', 'Boisson', 'Autre'];
 // Illustrations de plat proposées à la publication (clé d'icône SVG, stockée telle quelle en base)
 const FOOD_ICONS = ['plate','pot','pasta','bowl','salad','pizza','taco','burger','pan','croissant','pancake','cake','cupcake','donut','icecream','drink'];
@@ -265,6 +304,7 @@ function renderAuth(tab = 'login') {
       await refreshMe();
       toast('Bienvenue ' + data.user.username, true);
       go('feed');
+      if (tab === 'register') openOnboarding();
     } catch (err) {
       toast(err.message);
       btn.disabled = false;
@@ -399,7 +439,7 @@ async function go(view, arg) {
     challenges: viewChallenges, rewards: viewRewards, profile: viewProfile,
     recipe: viewRecipe, user: viewUser, leaderboard: viewLeaderboard,
     notifications: viewNotifications, bookmarks: viewBookmarks,
-    moderation: viewModeration, legal: viewLegal,
+    moderation: viewModeration, legal: viewLegal, drafts: viewDrafts,
   };
   await (R[view] || viewFeed)(arg);
 }
@@ -431,7 +471,7 @@ function recipeCard(r) {
     </div>
     <div class="recipe-body" data-open="${r.id}">
       <div class="likes-line">${r.likes} mention${r.likes>1?'s':''} j'aime</div>
-      <h3><span class="who-inline">${esc(r.author.username)}</span>${esc(r.title)}</h3>
+      <h3><span class="who-inline">${esc(r.author.username)}</span>${esc(r.title)}${r.status==='draft'?' <span class="tag" style="background:var(--gold);color:#5a3a12">Brouillon</span>':''}</h3>
       <p class="desc">${esc(r.description)}</p>
       ${r.comments>0?`<div class="see-comments" data-open="${r.id}">Voir les ${r.comments} commentaire${r.comments>1?'s':''}</div>`:''}
       <div class="when-row">${timeAgo(r.created_at)}</div>
@@ -586,37 +626,48 @@ async function viewDiscover(preset = '') {
     <div class="chips" id="catChips">
       ${CATEGORIES.map(c=>`<button class="chip ${c==='Tout'?'active':''}" data-cat="${c}">${c}</button>`).join('')}
     </div>
+    <div class="filter-row">
+      <select id="filterPrep"><option value="">Temps : tous</option><option value="15">≤ 15 min</option><option value="30">≤ 30 min</option><option value="45">≤ 45 min</option><option value="60">≤ 60 min</option></select>
+      <select id="filterDifficulty"><option value="">Difficulté : toutes</option><option>Facile</option><option>Moyen</option><option>Difficile</option></select>
+      <select id="filterCost"><option value="">Budget : tous</option><option value="200">≤ 2 €</option><option value="500">≤ 5 €</option><option value="1000">≤ 10 €</option></select>
+    </div>
     <button class="chip" data-go="leaderboard" style="margin:2px 0 10px">Voir le classement des chefs</button>
     <div id="discoverList"></div>
     <div style="text-align:center"><button class="btn ghost small" id="loadMoreBtn" hidden style="margin-top:4px">Charger plus</button></div>`);
 
   let cat = 'Tout', q = preset, offset = 0, hasMore = false;
+  let maxPrep = '', difficulty = '', maxCost = '';
   const LIMIT = 15;
   const moreBtn = document.getElementById('loadMoreBtn');
+
+  const buildPath = () => {
+    let path = `/recipes?sort=trending`;
+    if (cat !== 'Tout') path += `&category=${encodeURIComponent(cat)}`;
+    if (q) path += `&q=${encodeURIComponent(q)}`;
+    if (maxPrep) path += `&max_prep=${maxPrep}`;
+    if (difficulty) path += `&difficulty=${encodeURIComponent(difficulty)}`;
+    if (maxCost) path += `&max_cost=${maxCost}`;
+    return path;
+  };
+
   const run = async () => {
     const list = document.getElementById('discoverList');
     list.innerHTML = skeletonCards(3);
     offset = 0; moreBtn.hidden = true;
-    let path = `/recipes?sort=trending`;
-    if (cat !== 'Tout') path += `&category=${encodeURIComponent(cat)}`;
-    if (q) path += `&q=${encodeURIComponent(q)}`;
     try {
-      const { recipes, hasMore: more } = await api(`${path}&limit=${LIMIT}&offset=0`);
+      const { recipes, hasMore: more } = await api(`${buildPath()}&limit=${LIMIT}&offset=0`);
       list.innerHTML = recipes.length
         ? recipes.map(recipeCard).join('')
-        : `<div class="empty"><div class="big">${icon('search')}</div><p>Rien trouvé. Essaie un autre mot-clé.</p></div>`;
+        : `<div class="empty"><div class="big">${icon('search')}</div><p>Rien trouvé. Essaie d'élargir tes filtres.</p></div>`;
       wireRecipeCards(list);
       offset = recipes.length; hasMore = more;
       moreBtn.hidden = !hasMore;
     } catch (err) { toast(err.message); }
   };
   moreBtn.onclick = async () => {
-    let path = `/recipes?sort=trending`;
-    if (cat !== 'Tout') path += `&category=${encodeURIComponent(cat)}`;
-    if (q) path += `&q=${encodeURIComponent(q)}`;
     moreBtn.textContent = '…';
     try {
-      const { recipes, hasMore: more } = await api(`${path}&limit=${LIMIT}&offset=${offset}`);
+      const { recipes, hasMore: more } = await api(`${buildPath()}&limit=${LIMIT}&offset=${offset}`);
       const list = document.getElementById('discoverList');
       list.insertAdjacentHTML('beforeend', recipes.map(recipeCard).join(''));
       wireRecipeCards(list);
@@ -633,6 +684,9 @@ async function viewDiscover(preset = '') {
     document.querySelectorAll('#catChips .chip').forEach((x) => x.classList.remove('active'));
     c.classList.add('active'); cat = c.dataset.cat; run();
   });
+  document.getElementById('filterPrep').onchange = (e) => { maxPrep = e.target.value; run(); };
+  document.getElementById('filterDifficulty').onchange = (e) => { difficulty = e.target.value; run(); };
+  document.getElementById('filterCost').onchange = (e) => { maxCost = e.target.value; run(); };
   document.querySelector('[data-go="leaderboard"]').onclick = () => go('leaderboard');
   run();
 }
@@ -642,52 +696,104 @@ async function viewDiscover(preset = '') {
    ============================================================ */
 async function viewCreate(edit) {
   const isEdit = edit && edit.id;
+  const isDraft = isEdit && edit.status === 'draft';
   const sel = (v, cur) => v === cur ? ' selected' : '';
+  const euros = (cents) => cents == null ? '' : (cents / 100).toFixed(2);
   App.state.view = 'create';
+  // Création guidée en étapes (Lot 6) : uniquement pour une nouvelle recette. En édition on
+  // garde le formulaire complet sur une page — quelqu'un qui corrige une recette existante
+  // n'a pas besoin d'être promené étape par étape. Le formulaire (champs, id, logique de
+  // soumission) est strictement identique entre les deux modes : seule la présentation en
+  // "pages" masquées/affichées change, via l'attribut `hidden` (qui n'exclut rien de FormData).
+  const STEP_LABELS = ['Essentiel', 'Ingrédients', 'Préparation', 'Nutrition'];
+  const stepHidden = (n) => (!isEdit && n > 1) ? 'hidden' : '';
   shell(`
-    <div class="section-title serif">${isEdit?'Modifier la recette':'Nouvelle recette'}</div>
+    <div class="section-title serif">${isEdit?(isDraft?'Modifier le brouillon':'Modifier la recette'):'Nouvelle recette'}</div>
     <div class="card" style="padding:18px">
+      ${!isEdit ? `
+      <div class="wiz-progress" id="wizProgress">
+        ${STEP_LABELS.map((label,i)=>`
+          <div class="wiz-dot${i===0?' active':''}" data-dot="${i+1}">
+            <span class="wiz-dot-num">${i+1}</span><span class="wiz-dot-label">${label}</span>
+          </div>`).join('')}
+      </div>` : ''}
       <form id="recipeForm">
-        <div class="field"><label>Titre du plat</label><input name="title" required placeholder="Ex : Tarte aux pommes de mamie" value="${isEdit?esc(edit.title):''}"></div>
-        <div class="field"><label>Photo du plat <span class="muted" style="font-weight:600">(optionnel)</span></label>
-          <div class="photo-drop" id="photoDrop">
-            <div class="photo-empty" id="photoEmpty">
-              <div class="pe-ic">${icon('camera')}</div>
-              <div>Ajoute une photo depuis ta pellicule</div>
-              <div class="muted" style="font-size:.78rem">Elle sera compressée automatiquement</div>
+        <div class="wiz-step" data-step="1">
+          <div class="field"><label>Titre du plat</label><input name="title" required placeholder="Ex : Tarte aux pommes de mamie" value="${isEdit?esc(edit.title):''}"></div>
+          <div class="field"><label>Photo du plat <span class="muted" style="font-weight:600">(optionnel)</span></label>
+            <div class="photo-drop" id="photoDrop">
+              <div class="photo-empty" id="photoEmpty">
+                <div class="pe-ic">${icon('camera')}</div>
+                <div>Ajoute une photo depuis ta pellicule</div>
+                <div class="muted" style="font-size:.78rem">Elle sera compressée automatiquement</div>
+              </div>
+              <img class="photo-prev" id="photoPrev" hidden alt="aperçu">
+              <button type="button" class="photo-remove" id="photoRemove" hidden>✕</button>
             </div>
-            <img class="photo-prev" id="photoPrev" hidden alt="aperçu">
-            <button type="button" class="photo-remove" id="photoRemove" hidden>✕</button>
+            <input type="file" id="photoInput" accept="image/*" hidden>
           </div>
-          <input type="file" id="photoInput" accept="image/*" hidden>
-        </div>
-        <div class="field"><label>… ou choisis une illustration</label>
-          <div class="emoji-pick" id="emojiPick">
-            ${FOOD_ICONS.map((k,i)=>`<button type="button" class="${(isEdit?k===edit.image:i===0)?'sel':''}" data-icon="${k}">${icon(k)}</button>`).join('')}
+          <div class="field"><label>… ou choisis une illustration</label>
+            <div class="emoji-pick" id="emojiPick">
+              ${FOOD_ICONS.map((k,i)=>`<button type="button" class="${(isEdit?k===edit.image:i===0)?'sel':''}" data-icon="${k}">${icon(k)}</button>`).join('')}
+            </div>
+          </div>
+          <div class="dyn-row" style="gap:8px">
+            <div class="field" style="flex:1;margin:0"><label>Catégorie</label>
+              <select name="category">${CATEGORIES.filter(c=>c!=='Tout').map(c=>`<option${sel(c, isEdit?edit.category:'')}>${c}</option>`).join('')}</select></div>
+            <div class="field" style="flex:1;margin:0"><label>Difficulté</label>
+              <select name="difficulty">${['Facile','Moyen','Difficile'].map(d=>`<option${sel(d, isEdit?edit.difficulty:'')}>${d}</option>`).join('')}</select></div>
+          </div>
+          <div class="dyn-row" style="gap:8px;margin-top:14px">
+            <div class="field" style="flex:1;margin:0"><label>Temps (min)</label><input name="prep_minutes" type="number" value="${isEdit?edit.prep_minutes:20}" min="1"></div>
+            <div class="field" style="flex:1;margin:0"><label>Portions</label><input name="servings" type="number" value="${isEdit?edit.servings:2}" min="1"></div>
           </div>
         </div>
-        <div class="field"><label>Description</label><textarea name="description" placeholder="Raconte ce plat en quelques mots…">${isEdit?esc(edit.description):''}</textarea></div>
-        <div class="dyn-row" style="gap:8px">
-          <div class="field" style="flex:1;margin:0"><label>Catégorie</label>
-            <select name="category">${CATEGORIES.filter(c=>c!=='Tout').map(c=>`<option${sel(c, isEdit?edit.category:'')}>${c}</option>`).join('')}</select></div>
-          <div class="field" style="flex:1;margin:0"><label>Difficulté</label>
-            <select name="difficulty">${['Facile','Moyen','Difficile'].map(d=>`<option${sel(d, isEdit?edit.difficulty:'')}>${d}</option>`).join('')}</select></div>
+        <div class="wiz-step" data-step="2" ${stepHidden(2)}>
+          <div class="field" style="margin-top:0"><label>Ingrédients</label>
+            <div class="ing-head muted">Quantité · Unité · Ingrédient</div>
+            <div id="ingList"></div>
+            <button type="button" class="btn ghost small" id="addIng">+ Ajouter un ingrédient</button>
+            <datalist id="unitList">
+              ${['g','kg','ml','cl','L','c. à soupe','c. à café','pièce(s)','pincée','tranche(s)','botte'].map(u=>`<option value="${esc(u)}">`).join('')}
+            </datalist>
+          </div>
         </div>
-        <div class="dyn-row" style="gap:8px;margin-top:14px">
-          <div class="field" style="flex:1;margin:0"><label>Temps (min)</label><input name="prep_minutes" type="number" value="${isEdit?edit.prep_minutes:20}" min="1"></div>
-          <div class="field" style="flex:1;margin:0"><label>Portions</label><input name="servings" type="number" value="${isEdit?edit.servings:2}" min="1"></div>
+        <div class="wiz-step" data-step="3" ${stepHidden(3)}>
+          <div class="field" style="margin-top:0"><label>Description</label><textarea name="description" placeholder="Raconte ce plat en quelques mots…">${isEdit?esc(edit.description):''}</textarea></div>
+          <div class="field"><label>Étapes de préparation</label>
+            <div id="stepList"></div>
+            <button type="button" class="btn ghost small" id="addStep">+ Ajouter une étape</button>
+          </div>
+          <div class="field"><label>Tags (séparés par des virgules)</label>
+            <input name="tags" placeholder="ex : végétarien, rapide, chocolat" value="${isEdit?esc((edit.tags||[]).join(', ')):''}"></div>
         </div>
-        <div class="field" style="margin-top:14px"><label>Ingrédients</label>
-          <div id="ingList"></div>
-          <button type="button" class="btn ghost small" id="addIng">+ Ajouter un ingrédient</button>
+        <div class="wiz-step" data-step="4" ${stepHidden(4)}>
+          <div class="section-title serif" style="font-size:1.1rem;margin-top:0">Nutrition &amp; coût <span class="muted" style="font-weight:600;font-size:.8rem">(optionnel, par portion)</span></div>
+          <div class="dyn-row" style="gap:8px">
+            <div class="field" style="flex:1;margin:0"><label>Calories (kcal)</label><input name="calories" type="number" min="0" value="${isEdit&&edit.calories!=null?edit.calories:''}"></div>
+            <div class="field" style="flex:1;margin:0"><label>Coût par portion (€)</label><input name="cost_eur" type="number" min="0" step="0.01" value="${isEdit?euros(edit.cost_cents):''}"></div>
+          </div>
+          <div class="dyn-row" style="gap:8px">
+            <div class="field" style="flex:1;margin:0"><label>Protéines (g)</label><input name="protein_g" type="number" min="0" step="0.1" value="${isEdit&&edit.protein_g!=null?edit.protein_g:''}"></div>
+            <div class="field" style="flex:1;margin:0"><label>Glucides (g)</label><input name="carbs_g" type="number" min="0" step="0.1" value="${isEdit&&edit.carbs_g!=null?edit.carbs_g:''}"></div>
+          </div>
+          <div class="dyn-row" style="gap:8px">
+            <div class="field" style="flex:1;margin:0"><label>Lipides (g)</label><input name="fat_g" type="number" min="0" step="0.1" value="${isEdit&&edit.fat_g!=null?edit.fat_g:''}"></div>
+            <div class="field" style="flex:1;margin:0"><label>Fibres (g)</label><input name="fiber_g" type="number" min="0" step="0.1" value="${isEdit&&edit.fiber_g!=null?edit.fiber_g:''}"></div>
+          </div>
+          <div class="field"><label>Conservation</label><input name="storage_instructions" placeholder="Ex : 3 jours au frigo, dans une boîte hermétique" value="${isEdit?esc(edit.storage_instructions||''):''}"></div>
+          <div class="field"><label>Réchauffage</label><input name="reheat_instructions" placeholder="Ex : 2 min au micro-ondes" value="${isEdit?esc(edit.reheat_instructions||''):''}"></div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <button class="btn" type="submit" id="submitBtn" style="flex:1">${isEdit?(isDraft?'Publier maintenant':'Enregistrer les modifications'):'Publier ma recette (+25 pts)'}</button>
+            ${(!isEdit || isDraft) ? `<button class="btn ghost" type="button" id="draftBtn" style="flex:1">Enregistrer comme brouillon</button>` : ''}
+          </div>
         </div>
-        <div class="field"><label>Étapes de préparation</label>
-          <div id="stepList"></div>
-          <button type="button" class="btn ghost small" id="addStep">+ Ajouter une étape</button>
-        </div>
-        <div class="field"><label>Tags (séparés par des virgules)</label>
-          <input name="tags" placeholder="ex : végétarien, rapide, chocolat" value="${isEdit?esc((edit.tags||[]).join(', ')):''}"></div>
-        <button class="btn" type="submit">${isEdit?'Enregistrer les modifications':'Publier ma recette <span style="opacity:.85">(+25 pts)</span>'}</button>
+        ${!isEdit ? `
+        <div class="wiz-nav" id="wizNav">
+          <button type="button" class="btn ghost" id="wizPrev" hidden>← Précédent</button>
+          <button type="button" class="btn" id="wizNext">Suivant →</button>
+        </div>` : ''}
       </form>
     </div>`);
 
@@ -735,45 +841,139 @@ async function viewCreate(edit) {
     div.append(inp, rm);
     return div;
   };
+  // Un ingrédient = 3 champs (quantité / unité / nom) pour permettre le recalcul automatique
+  // des quantités quand on ajuste les portions sur la page détail. `val` peut être un objet
+  // structuré {qty,unit,label} ou une chaîne (recette créée avant ce format) : dans ce cas,
+  // tout le texte va dans le champ "nom", quantité/unité restent à compléter à la main.
+  const mkIngRow = (val, ph = {}) => {
+    const div = document.createElement('div');
+    div.className = 'ing-row';
+    const qty = document.createElement('input');
+    qty.type = 'number'; qty.step = 'any'; qty.min = '0'; qty.className = 'ing-qty';
+    qty.placeholder = ph.qty || 'Qté';
+    const unit = document.createElement('input');
+    unit.className = 'ing-unit'; unit.placeholder = ph.unit || 'unité'; unit.setAttribute('list', 'unitList');
+    const label = document.createElement('input');
+    label.className = 'ing-label'; label.placeholder = ph.label || 'Ingrédient';
+    if (val && typeof val === 'object') {
+      if (val.qty != null) qty.value = val.qty;
+      if (val.unit) unit.value = val.unit;
+      label.value = val.label || '';
+    } else if (typeof val === 'string' && val) {
+      label.value = val;
+    }
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'rm'; rm.textContent = '×';
+    rm.onclick = () => div.remove();
+    div.append(qty, unit, label, rm);
+    return div;
+  };
   const ingList = document.getElementById('ingList');
   const stepList = document.getElementById('stepList');
   if (isEdit) {
-    (edit.ingredients.length ? edit.ingredients : ['']).forEach((v) => ingList.appendChild(mkRow('Un ingrédient', v)));
+    (edit.ingredients.length ? edit.ingredients : [null]).forEach((v) => ingList.appendChild(mkIngRow(v)));
     (edit.steps.length ? edit.steps : ['']).forEach((v) => stepList.appendChild(mkRow('Une étape', v)));
   } else {
-    ingList.appendChild(mkRow('200g de farine'));
-    ingList.appendChild(mkRow('3 œufs'));
+    ingList.appendChild(mkIngRow(null, { qty: '200', unit: 'g', label: 'farine' }));
+    ingList.appendChild(mkIngRow(null, { qty: '3', unit: '', label: 'œufs' }));
     stepList.appendChild(mkRow('Préchauffer le four à 180°C'));
   }
-  document.getElementById('addIng').onclick = () => ingList.appendChild(mkRow('Un ingrédient'));
+  document.getElementById('addIng').onclick = () => ingList.appendChild(mkIngRow(null));
   document.getElementById('addStep').onclick = () => stepList.appendChild(mkRow('Une étape'));
 
-  document.getElementById('recipeForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target));
-    const ingredients = [...ingList.querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+  const collectIngredients = () => [...ingList.children].map((row) => {
+    const qtyVal = row.querySelector('.ing-qty').value.trim();
+    const unit = row.querySelector('.ing-unit').value.trim();
+    const label = row.querySelector('.ing-label').value.trim();
+    if (!label) return null;
+    return { qty: qtyVal ? Number(qtyVal) : null, unit, label };
+  }).filter(Boolean);
+
+  // Convertit un champ numérique optionnel du formulaire : chaîne vide -> absent (undefined,
+  // donc omis du JSON envoyé), sinon le nombre — pour ne jamais transformer un champ vide en 0.
+  const optNum = (v) => (v === '' || v === undefined ? undefined : Number(v));
+
+  async function submitRecipe(status) {
+    const f = Object.fromEntries(new FormData(document.getElementById('recipeForm')));
+    const ingredients = collectIngredients();
     const steps = [...stepList.querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
     const tags = (f.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = isEdit ? 'Enregistrement…' : 'Publication…';
+    const submitBtn = document.getElementById('submitBtn');
+    const draftBtn = document.getElementById('draftBtn');
+    if (submitBtn) submitBtn.disabled = true;
+    if (draftBtn) draftBtn.disabled = true;
+    const busyLabel = status === 'draft' ? 'Enregistrement…' : (isEdit ? 'Enregistrement…' : 'Publication…');
+    if (status === 'draft' && draftBtn) draftBtn.textContent = busyLabel;
+    else if (submitBtn) submitBtn.textContent = busyLabel;
     const body = {
       title: f.title, description: f.description, category: f.category,
       difficulty: f.difficulty, prep_minutes: f.prep_minutes, servings: f.servings,
-      image: dishIcon, photo: photoData, ingredients, steps, tags,
+      image: dishIcon, photo: photoData, ingredients, steps, tags, status,
+      calories: optNum(f.calories), protein_g: optNum(f.protein_g), carbs_g: optNum(f.carbs_g),
+      fat_g: optNum(f.fat_g), fiber_g: optNum(f.fiber_g),
+      cost_cents: f.cost_eur ? Math.round(parseFloat(f.cost_eur) * 100) : undefined,
+      storage_instructions: f.storage_instructions, reheat_instructions: f.reheat_instructions,
     };
     try {
       if (isEdit) {
         await api(`/recipes/${edit.id}`, { method: 'PUT', body });
-        toast('Recette mise à jour', true);
+        toast(status === 'draft' ? 'Brouillon enregistré' : 'Recette publiée', true);
         go('recipe', edit.id);
+      } else if (status === 'draft') {
+        await api('/recipes', { method: 'POST', body });
+        toast('Brouillon enregistré', true);
+        go('profile');
       } else {
         await api('/recipes', { method: 'POST', body });
         await refreshMe();
         toast('Recette publiée · +25 points', true);
         go('feed');
       }
-    } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = isEdit ? 'Enregistrer' : 'Publier ma recette'; }
+    } catch (err) {
+      toast(err.message);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = isEdit?(isDraft?'Publier maintenant':'Enregistrer les modifications'):'Publier ma recette (+25 pts)'; }
+      if (draftBtn) { draftBtn.disabled = false; draftBtn.textContent = 'Enregistrer comme brouillon'; }
+    }
+  }
+
+  document.getElementById('recipeForm').onsubmit = (e) => {
+    e.preventDefault();
+    submitRecipe('published');
   };
+  const draftBtn = document.getElementById('draftBtn');
+  if (draftBtn) draftBtn.onclick = () => submitRecipe('draft');
+
+  // Navigation du parcours guidé (uniquement à la création — voir stepHidden plus haut).
+  // Les étapes restent toutes dans le même <form>, seul l'attribut `hidden` change : la
+  // collecte des champs (FormData, collectIngredients, etc.) n'a donc rien à savoir de la
+  // pagination et reste identique au formulaire "classique" utilisé en édition.
+  if (!isEdit) {
+    const wizSteps = [...document.querySelectorAll('.wiz-step')];
+    const wizDots = [...document.querySelectorAll('.wiz-dot')];
+    const wizPrev = document.getElementById('wizPrev');
+    const wizNext = document.getElementById('wizNext');
+    let wizCurrent = 1;
+    const showWizStep = (n) => {
+      wizCurrent = n;
+      wizSteps.forEach((s) => { s.hidden = Number(s.dataset.step) !== n; });
+      wizDots.forEach((d) => {
+        const dn = Number(d.dataset.dot);
+        d.classList.toggle('active', dn === n);
+        d.classList.toggle('done', dn < n);
+      });
+      wizPrev.hidden = n === 1;
+      wizNext.hidden = n === wizSteps.length;
+      document.querySelector('.card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    wizNext.onclick = () => {
+      if (wizCurrent === 1) {
+        const titleInput = document.querySelector('#recipeForm [name=title]');
+        if (!titleInput.value.trim()) { toast('Donne un titre à ta recette avant de continuer'); titleInput.focus(); return; }
+      }
+      if (wizCurrent < wizSteps.length) showWizStep(wizCurrent + 1);
+    };
+    wizPrev.onclick = () => { if (wizCurrent > 1) showWizStep(wizCurrent - 1); };
+  }
 }
 
 /* ============================================================
@@ -783,11 +983,13 @@ async function viewRecipe(id) {
   App.state.view = 'feed';
   try {
     const { recipe: r } = await api('/recipes/' + id);
+    const baseServings = r.servings || 1;
     shell(`
       <button class="back-btn" id="back">← Retour</button>
       <div class="card" style="margin-bottom:16px">
         <div class="detail-cover ${r.photo?'has-photo':''}" style="${coverStyle(r.category)}">${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}">` : glyph(r.image)}</div>
         <div style="padding:16px">
+          ${r.status==='draft'?`<span class="tag" style="background:var(--gold);color:#5a3a12;margin-bottom:8px;display:inline-block">Brouillon — visible par toi seul·e</span>`:''}
           <div class="recipe-head" style="padding:0 0 12px">
             <div class="mini-avatar" data-user="${r.author.id}">${avatarGlyph(r.author.avatar, r.author.avatar_color)}</div>
             <div><div class="who" data-user="${r.author.id}">${esc(r.author.username)}</div>
@@ -805,15 +1007,28 @@ async function viewRecipe(id) {
             <button class="btn ghost small" id="bmBtn">${r.bookmarked?'Enregistré':'Enregistrer'}</button>
             ${r.is_mine?'':'<button class="btn ghost small" id="reportBtn" style="border-color:var(--ink-soft);color:var(--ink-soft)">Signaler</button>'}
           </div>
-          ${r.is_mine?`<div style="display:flex;gap:10px;margin-top:10px">
+          ${r.is_mine?`<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
             <button class="btn ghost small" id="editBtn">Modifier</button>
+            ${r.status==='draft'?'<button class="btn small" id="publishBtn">Publier</button>':''}
             <button class="btn ghost small" id="delBtn" style="border-color:var(--terracotta);color:var(--terracotta)">Supprimer</button>
           </div>`:''}
 
-          <div class="detail-section"><h3 class="serif">Ingrédients</h3>
-            <ul class="ing-list">${r.ingredients.map(i=>`<li>${esc(i)}</li>`).join('') || '<li class="muted">Non précisé</li>'}</ul></div>
-          <div class="detail-section"><h3 class="serif">Préparation</h3>
+          <div class="detail-section">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <h3 class="serif" style="margin-bottom:0">${icon('bowl')} Ingrédients</h3>
+              <div class="portion-adjust">
+                <button type="button" id="servMinus" class="stepper-btn" aria-label="Moins de portions">−</button>
+                <span><b id="servCount">${baseServings}</b> portion${baseServings>1?'s':''}</span>
+                <button type="button" id="servPlus" class="stepper-btn" aria-label="Plus de portions">+</button>
+              </div>
+            </div>
+            <ul class="ing-list" id="ingDisplay">${renderIngredientList(r.ingredients, 1)}</ul>
+          </div>
+          <div class="detail-section"><h3 class="serif">${icon('check')} Préparation</h3>
             <ol class="step-list">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('') || '<li class="muted">Non précisé</li>'}</ol></div>
+
+          ${nutritionSectionHtml(r)}
+          ${storageSectionHtml(r)}
 
           <div class="detail-section"><h3 class="serif">${icon('comment')} Commentaires (${r.commentList.length})</h3>
             <div id="commentList">${r.commentList.map(commentHtml).join('') || '<p class="muted">Sois le premier à commenter.</p>'}</div>
@@ -829,6 +1044,19 @@ async function viewRecipe(id) {
     wireCommentReports(App.el);
     document.getElementById('back').onclick = () => go('feed');
     App.el.querySelectorAll('[data-user]').forEach((e) => e.onclick = () => go('user', e.dataset.user));
+
+    // Ajusteur de portions : recalcule les quantités des ingrédients structurés côté client
+    // (aucun appel serveur). Les valeurs nutrition/coût restent fixes : elles sont "par
+    // portion", une portion a toujours la même composition quel que soit le nombre préparé.
+    let currentServings = baseServings;
+    const updatePortions = () => {
+      document.getElementById('servCount').textContent = currentServings;
+      document.getElementById('ingDisplay').innerHTML = renderIngredientList(r.ingredients, currentServings / baseServings);
+    };
+    const servMinus = document.getElementById('servMinus');
+    const servPlus = document.getElementById('servPlus');
+    servMinus.onclick = () => { if (currentServings > 1) { currentServings--; updatePortions(); } };
+    servPlus.onclick = () => { if (currentServings < 99) { currentServings++; updatePortions(); } };
 
     document.getElementById('likeBtn').onclick = async () => {
       haptic();
@@ -850,6 +1078,16 @@ async function viewRecipe(id) {
 
     if (r.is_mine) {
       document.getElementById('editBtn').onclick = () => viewCreate(r);
+      const publishBtn = document.getElementById('publishBtn');
+      if (publishBtn) publishBtn.onclick = async () => {
+        publishBtn.disabled = true; publishBtn.textContent = 'Publication…';
+        try {
+          await api(`/recipes/${id}`, { method: 'PUT', body: { ...r, status: 'published' } });
+          await refreshMe();
+          toast('Recette publiée · +25 points', true);
+          go('recipe', id);
+        } catch (err) { toast(err.message); publishBtn.disabled = false; publishBtn.textContent = 'Publier'; }
+      };
       document.getElementById('delBtn').onclick = () => {
         showModal(`<div class="mic">${icon('trash')}</div><h3 class="serif">Supprimer cette recette ?</h3>
           <p class="muted">Cette action est définitive.</p>
@@ -878,6 +1116,45 @@ async function viewRecipe(id) {
       } catch (err) { toast(err.message); }
     };
   } catch (err) { toast(err.message); go('feed'); }
+}
+
+// Arrondit une quantité ajustée à 2 décimales, sans zéros inutiles (300 plutôt que 300.00)
+function fmtQty(n) {
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded);
+}
+
+// Un ingrédient peut être une chaîne libre (recette créée avant le Lot 8, non ajustable) ou
+// un objet structuré {qty, unit, label} dont la quantité est recalculée selon `scale`.
+function renderIngredientList(ingredients, scale) {
+  if (!ingredients.length) return '<li class="muted">Non précisé</li>';
+  return ingredients.map((it) => {
+    if (typeof it === 'string') return `<li>${esc(it)}</li>`;
+    const qtyPart = it.qty != null ? `<b>${fmtQty(it.qty * scale)}${it.unit ? ' ' + esc(it.unit) : ''}</b> ` : '';
+    return `<li>${qtyPart}${esc(it.label)}</li>`;
+  }).join('');
+}
+
+function nutritionSectionHtml(r) {
+  const items = [
+    r.calories != null && ['Calories', `${r.calories} kcal`],
+    r.protein_g != null && ['Protéines', `${r.protein_g} g`],
+    r.carbs_g != null && ['Glucides', `${r.carbs_g} g`],
+    r.fat_g != null && ['Lipides', `${r.fat_g} g`],
+    r.fiber_g != null && ['Fibres', `${r.fiber_g} g`],
+    r.cost_cents != null && ['Coût', `${(r.cost_cents / 100).toFixed(2)} €`],
+  ].filter(Boolean);
+  if (!items.length) return '';
+  return `<div class="detail-section"><h3 class="serif">${icon('bolt')} Nutrition &amp; coût <span class="muted" style="font-size:.75rem;font-weight:600">(par portion)</span></h3>
+    <div class="nutri-grid">${items.map(([k, v]) => `<div class="nutri-item"><div class="nutri-val">${esc(v)}</div><div class="nutri-label">${esc(k)}</div></div>`).join('')}</div></div>`;
+}
+
+function storageSectionHtml(r) {
+  if (!r.storage_instructions && !r.reheat_instructions) return '';
+  return `<div class="detail-section"><h3 class="serif">${icon('pot')} Conservation &amp; réchauffage</h3>
+    ${r.storage_instructions ? `<p class="muted">${icon('clock')} ${esc(r.storage_instructions)}</p>` : ''}
+    ${r.reheat_instructions ? `<p class="muted" style="margin-top:6px">${icon('flame')} ${esc(r.reheat_instructions)}</p>` : ''}
+  </div>`;
 }
 
 function commentHtml(c) {
@@ -1042,6 +1319,7 @@ function renderProfile(user, badges, extra, isSelf) {
     ${isSelf?`
       <div style="display:grid;gap:10px;margin-top:16px">
         <button class="btn ghost small" data-go="bookmarks">Mon carnet de recettes</button>
+        <button class="btn ghost small" id="draftsBtn">Mes brouillons</button>
         <button class="btn ghost small" id="histBtn">Mon historique de points</button>
         <button class="btn ghost small" id="themeBtn">Basculer en mode sombre</button>
         ${user.is_admin ? `<button class="btn ghost small" id="modBtn" style="border-color:var(--terracotta);color:var(--terracotta)">${icon('crown')} Modération</button>` : ''}
@@ -1058,6 +1336,7 @@ function renderProfile(user, badges, extra, isSelf) {
       App.state = { user: null, badges: [], view: 'feed' };
       renderAuth('login');
     };
+    document.getElementById('draftsBtn').onclick = () => go('drafts');
     document.getElementById('histBtn').onclick = showHistory;
     const tb = document.getElementById('themeBtn');
     tb.textContent = document.documentElement.dataset.theme === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre';
@@ -1327,12 +1606,31 @@ async function viewNotifications() {
 /* ============================================================
    BOOKMARKS / FAVORIS
    ============================================================ */
+async function viewDrafts() {
+  App.state.view = '';
+  shell(`
+    <button class="back-btn" id="back">← Retour</button>
+    <div class="section-title serif">Mes brouillons</div>
+    <p class="muted" style="margin-bottom:12px">Des recettes en préparation, visibles par toi seul·e.</p>
+    <div id="draftList">${skeletonCards(2)}</div>`);
+  document.getElementById('back').onclick = () => go('profile');
+  try {
+    const { recipes } = await api(`/recipes?author=${App.state.user.id}&drafts=1`);
+    const drafts = recipes.filter((r) => r.status === 'draft');
+    const list = document.getElementById('draftList');
+    list.innerHTML = drafts.length ? drafts.map(recipeCard).join('')
+      : `<div class="empty"><div class="big">${icon('scroll')}</div><p>Aucun brouillon pour l'instant.</p></div>`;
+    wireRecipeCards(list);
+  } catch (err) { toast(err.message); }
+}
+
 async function viewBookmarks() {
   App.state.view = '';
   shell(`
     <button class="back-btn" id="back">← Retour</button>
     <div class="section-title serif">Mon carnet de recettes</div>
     <p class="muted" style="margin-bottom:12px">Les recettes que tu as enregistrées pour les cuisiner plus tard.</p>
+    <div id="bmActions" style="margin-bottom:12px"></div>
     <div id="bmList">${skeletonCards(2)}</div>`);
   document.getElementById('back').onclick = () => go('profile');
   try {
@@ -1341,7 +1639,49 @@ async function viewBookmarks() {
     list.innerHTML = recipes.length ? recipes.map(recipeCard).join('')
       : `<div class="empty"><div class="big">${icon('bookmark')}</div><p>Ton carnet est vide.<br>Touche « Enregistrer » sur une recette pour la retrouver ici.</p></div>`;
     wireRecipeCards(list);
+    if (recipes.length) {
+      document.getElementById('bmActions').innerHTML =
+        `<button class="btn ghost small" id="shoppingBtn">${icon('cart')} Générer ma liste de courses</button>`;
+      document.getElementById('shoppingBtn').onclick = () => openShoppingList(recipes);
+    }
   } catch (err) { toast(err.message); }
+}
+
+// Agrège les ingrédients de plusieurs recettes (déjà chargées) en une liste cochable groupée
+// par recette. Purement côté client — pas de nouvelle route serveur nécessaire, les
+// ingrédients sont déjà renvoyés par /api/bookmarks. L'état coché est gardé en localStorage
+// pour survivre à une fermeture/réouverture pendant les courses.
+function openShoppingList(recipes) {
+  const STORAGE_KEY = 'cuistot_shopping_checked';
+  const checked = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+  const groups = recipes.map((r) => ({
+    title: r.title,
+    items: (r.ingredients || []).map((ing, i) => {
+      const key = `${r.id}:${i}`;
+      const label = typeof ing === 'string'
+        ? ing
+        : `${ing.qty != null ? fmtQty(ing.qty) + (ing.unit ? ' ' + ing.unit : '') + ' ' : ''}${ing.label}`;
+      return { key, label };
+    }),
+  })).filter((g) => g.items.length);
+
+  showModal(`<h3 class="serif">Liste de courses</h3>
+    <p class="muted" style="font-size:.85rem;margin-top:4px">Depuis les recettes de ton carnet.</p>
+    <div style="max-height:55vh;overflow:auto;text-align:left;margin-top:14px">
+      ${groups.map((g) => `
+        <div style="margin-bottom:14px">
+          <div class="muted" style="font-weight:800;font-size:.82rem;margin-bottom:6px">${esc(g.title)}</div>
+          ${g.items.map((it) => `<label class="shopping-item ${checked.has(it.key)?'checked':''}">
+            <input type="checkbox" data-key="${esc(it.key)}" ${checked.has(it.key)?'checked':''}><span>${esc(it.label)}</span></label>`).join('')}
+        </div>`).join('') || '<p class="muted">Aucun ingrédient à lister.</p>'}
+    </div>
+    <button class="btn" id="closeModalBtn">Fermer</button>`);
+  document.getElementById('closeModalBtn').onclick = closeModal;
+  document.querySelectorAll('.shopping-item input').forEach((cb) => cb.onchange = () => {
+    if (cb.checked) checked.add(cb.dataset.key); else checked.delete(cb.dataset.key);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...checked]));
+    cb.closest('.shopping-item').classList.toggle('checked', cb.checked);
+  });
 }
 
 /* ============================================================

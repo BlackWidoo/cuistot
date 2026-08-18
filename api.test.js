@@ -370,3 +370,200 @@ test('export de données : ne contient que le profil et les recettes de l\'utili
   assert.equal(exp.data.recipes.length, 1);
   assert.equal(exp.data.recipes[0].title, 'Ma recette export');
 });
+
+// ---------- Lot 8 : fonctionnalités produit ----------
+
+test('un ingrédient structuré et un ingrédient legacy (chaîne) sont tous deux acceptés', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'ingred_test', email: `ingred_${Date.now()}@test.fr`, password: 'secret12345' } });
+
+  const created = await s.call('/recipes', {
+    method: 'POST',
+    body: { title: 'Salade mixte', tags: [], ingredients: [{ qty: 200, unit: 'g', label: 'tomates' }, '1 pincée de sel'] },
+  });
+  assert.equal(created.status, 200);
+  assert.deepEqual(created.data.recipe.ingredients[0], { qty: 200, unit: 'g', label: 'tomates' });
+  assert.equal(created.data.recipe.ingredients[1], '1 pincée de sel');
+});
+
+test('brouillon : invisible publiquement, visible par son auteur, pas de points à la création', async () => {
+  const author = makeSession();
+  const authorReg = await author.call('/register', { method: 'POST', body: { username: 'draft_test', email: `draft_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const pointsBefore = authorReg.data.user.points;
+
+  const created = await author.call('/recipes', { method: 'POST', body: { title: 'Recette en cours', tags: [], status: 'draft' } });
+  assert.equal(created.status, 200);
+  assert.equal(created.data.recipe.status, 'draft');
+  const id = created.data.recipe.id;
+
+  const me = await author.call('/me');
+  assert.equal(me.data.user.points, pointsBefore); // pas de points pour un brouillon
+
+  const viewer = makeSession();
+  const hiddenFromViewer = await viewer.call(`/recipes/${id}`);
+  assert.equal(hiddenFromViewer.status, 404);
+
+  const visibleToAuthor = await author.call(`/recipes/${id}`);
+  assert.equal(visibleToAuthor.status, 200);
+
+  const inFeed = await viewer.call(`/recipes?author=${authorReg.data.user.id}`);
+  assert.equal(inFeed.data.recipes.length, 0);
+});
+
+test('publier un brouillon accorde les points une seule fois (pas de doublon en republiant)', async () => {
+  const author = makeSession();
+  const authorReg = await author.call('/register', { method: 'POST', body: { username: 'publish_test', email: `publish_${Date.now()}@test.fr`, password: 'secret12345' } });
+
+  const created = await author.call('/recipes', { method: 'POST', body: { title: 'Brouillon à publier', tags: [], status: 'draft' } });
+  const id = created.data.recipe.id;
+  const pointsAfterDraft = (await author.call('/me')).data.user.points;
+
+  const published = await author.call(`/recipes/${id}`, { method: 'PUT', body: { title: 'Brouillon à publier', tags: [], status: 'published' } });
+  assert.equal(published.status, 200);
+  assert.equal(published.data.recipe.status, 'published');
+  const pointsAfterPublish = (await author.call('/me')).data.user.points;
+  assert.equal(pointsAfterPublish, pointsAfterDraft + 25); // POINTS.PUBLISH_RECIPE
+
+  // Republier (déjà publié) ne doit pas donner de points une deuxième fois
+  await author.call(`/recipes/${id}`, { method: 'PUT', body: { title: 'Brouillon à publier', tags: [], status: 'published' } });
+  const pointsAfterRepublish = (await author.call('/me')).data.user.points;
+  assert.equal(pointsAfterRepublish, pointsAfterPublish);
+});
+
+test('filtres : max_prep et difficulty réduisent correctement les résultats', async () => {
+  const s = makeSession();
+  const reg = await s.call('/register', { method: 'POST', body: { username: 'filter_test', email: `filter_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const authorId = reg.data.user.id;
+
+  await s.call('/recipes', { method: 'POST', body: { title: 'Rapide facile', tags: [], prep_minutes: 10, difficulty: 'Facile' } });
+  await s.call('/recipes', { method: 'POST', body: { title: 'Longue difficile', tags: [], prep_minutes: 180, difficulty: 'Difficile' } });
+
+  const byTime = await s.call(`/recipes?author=${authorId}&max_prep=30`);
+  assert.equal(byTime.data.recipes.length, 1);
+  assert.equal(byTime.data.recipes[0].title, 'Rapide facile');
+
+  const byDifficulty = await s.call(`/recipes?author=${authorId}&difficulty=Difficile`);
+  assert.equal(byDifficulty.data.recipes.length, 1);
+  assert.equal(byDifficulty.data.recipes[0].title, 'Longue difficile');
+});
+
+// ---------- Lot 10 : tests étendus ----------
+
+test('abonnement : suit/désabonne, crédite des points et notifie la personne suivie', async () => {
+  const db = require('../db');
+  const follower = makeSession();
+  const target = makeSession();
+  await follower.call('/register', { method: 'POST', body: { username: 'follower_test', email: `follower_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const targetReg = await target.call('/register', { method: 'POST', body: { username: 'target_test', email: `target_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const targetId = targetReg.data.user.id;
+  const pointsBefore = db.prepare('SELECT points FROM users WHERE id=?').get(targetId).points;
+
+  const unknownTarget = await follower.call(`/users/${targetId + 999999}/follow`, { method: 'POST' });
+  assert.equal(unknownTarget.status, 404); // cible inexistante
+
+  const follow = await follower.call(`/users/${targetId}/follow`, { method: 'POST' });
+  assert.equal(follow.status, 200);
+  assert.equal(follow.data.following, true);
+  assert.equal(follow.data.followers, 1);
+
+  const pointsAfter = db.prepare('SELECT points FROM users WHERE id=?').get(targetId).points;
+  assert.equal(pointsAfter, pointsBefore + 10); // POINTS.RECEIVE_FOLLOW
+
+  const notifs = await target.call('/notifications');
+  assert.ok(notifs.data.notifications.some((n) => n.type === 'follow'));
+  assert.ok(notifs.data.unread >= 1);
+
+  const markRead = await target.call('/notifications/read', { method: 'POST' });
+  assert.equal(markRead.status, 200);
+  const notifsAfter = await target.call('/notifications');
+  assert.equal(notifsAfter.data.unread, 0);
+
+  const unfollow = await follower.call(`/users/${targetId}/follow`, { method: 'POST' }); // toggle off
+  assert.equal(unfollow.data.following, false);
+  assert.equal(unfollow.data.followers, 0);
+});
+
+test('défis : publier une recette avec le tag d\'un défi ouvert le valide automatiquement (une fois)', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'challenger_test', email: `challenger_${Date.now()}@test.fr`, password: 'secret12345' } });
+
+  const before = await s.call('/challenges');
+  const chocoBefore = before.data.challenges.find((c) => c.tag === 'chocolat');
+  assert.ok(chocoBefore, 'le défi de seed "chocolat" doit exister');
+  assert.equal(chocoBefore.joined, false);
+
+  const created = await s.call('/recipes', { method: 'POST', body: { title: 'Fondant', tags: ['chocolat'], status: 'published' } });
+  assert.equal(created.status, 200);
+
+  const after = await s.call('/challenges');
+  const chocoAfter = after.data.challenges.find((c) => c.tag === 'chocolat');
+  assert.equal(chocoAfter.joined, true);
+  assert.equal(chocoAfter.participants, chocoBefore.participants + 1);
+
+  const history = await s.call('/points/history');
+  const reasons = history.data.events.map((e) => e.reason);
+  assert.ok(reasons.includes('Publication d\'une recette'));
+  assert.ok(reasons.includes('Défi validé : Défi chocolat'));
+
+  // Publier une deuxième recette avec le même tag ne doit pas revalider le défi.
+  await s.call('/recipes', { method: 'POST', body: { title: 'Mousse', tags: ['chocolat'], status: 'published' } });
+  const finalChallenges = await s.call('/challenges');
+  const chocoFinal = finalChallenges.data.challenges.find((c) => c.tag === 'chocolat');
+  assert.equal(chocoFinal.participants, chocoBefore.participants + 1); // pas +2
+});
+
+test('récompenses : points insuffisants refusés, échange ok, stock épuisé refusé à la tentative suivante', async () => {
+  const db = require('../db');
+  const s = makeSession();
+  const reg = await s.call('/register', { method: 'POST', body: { username: 'reward_test', email: `reward_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const userId = reg.data.user.id;
+
+  const rewardsList = await s.call('/rewards');
+  const reward = rewardsList.data.rewards.find((r) => r.title.includes('Gourmet'));
+  assert.ok(reward);
+
+  const poor = await s.call(`/rewards/${reward.id}/redeem`, { method: 'POST' });
+  assert.equal(poor.status, 400);
+  assert.equal(poor.data.code, 'INSUFFICIENT_POINTS');
+
+  // On force un stock=1 et assez de points pour un échange déterministe (pas d'accès direct
+  // à un mécanisme d'attribution de points aussi rapide dans les tests).
+  db.prepare('UPDATE rewards SET stock=1 WHERE id=?').run(reward.id);
+  db.prepare('UPDATE users SET points=? WHERE id=?').run(reward.cost, userId);
+
+  const ok = await s.call(`/rewards/${reward.id}/redeem`, { method: 'POST' });
+  assert.equal(ok.status, 200);
+  assert.ok(ok.data.code.startsWith('CUI-'));
+  assert.equal(ok.data.points, 0);
+
+  db.prepare('UPDATE users SET points=? WHERE id=?').run(reward.cost, userId); // re-crédite pour isoler le test du stock
+  const outOfStock = await s.call(`/rewards/${reward.id}/redeem`, { method: 'POST' });
+  assert.equal(outOfStock.status, 400);
+  assert.equal(outOfStock.data.code, 'OUT_OF_STOCK');
+});
+
+test('rate limit : la création de recette est bloquée au-delà de la limite horaire', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'ratelimit_test', email: `ratelimit_${Date.now()}@test.fr`, password: 'secret12345' } });
+
+  let last;
+  for (let i = 0; i < 21; i++) {
+    last = await s.call('/recipes', { method: 'POST', body: { title: `Recette ${i}`, tags: [] } });
+  }
+  assert.equal(last.status, 429);
+  assert.equal(last.data.code, 'RATE_LIMITED');
+});
+
+test('déconnexion : la session locale devient anonyme (invalidation totale du jeton = Lot 3, pas encore fait)', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'logout_test', email: `logout_${Date.now()}@test.fr`, password: 'secret12345' } });
+
+  const before = await s.call('/me');
+  assert.ok(before.data.user);
+
+  const logout = await s.call('/logout', { method: 'POST' });
+  assert.equal(logout.status, 200);
+
+  const after = await s.call('/me');
+  assert.equal(after.data.user, null);
+});

@@ -35,9 +35,18 @@ db.exec(`
     servings     INTEGER DEFAULT 2,
     image        TEXT DEFAULT 'plate',
     photo        TEXT DEFAULT '',     -- URL locale ou data URL (photo réelle, optionnelle)
-    ingredients  TEXT DEFAULT '[]',   -- JSON array
+    ingredients  TEXT DEFAULT '[]',   -- JSON array (chaînes legacy ou {qty,unit,label})
     steps        TEXT DEFAULT '[]',   -- JSON array
     tags         TEXT DEFAULT '[]',   -- JSON array
+    calories     INTEGER,             -- par portion
+    protein_g    REAL,
+    carbs_g      REAL,
+    fat_g        REAL,
+    fiber_g      REAL,
+    cost_cents   INTEGER,             -- coût par portion, centimes d'euro
+    storage_instructions TEXT DEFAULT '',
+    reheat_instructions  TEXT DEFAULT '',
+    status       TEXT DEFAULT 'published', -- 'draft' | 'published'
     created_at   TEXT DEFAULT (datetime('now'))
   );
 
@@ -215,6 +224,21 @@ try {
 
   const commentCols = db.prepare("PRAGMA table_info(comments)").all().map((c) => c.name);
   if (!commentCols.includes('is_hidden')) db.exec('ALTER TABLE comments ADD COLUMN is_hidden INTEGER DEFAULT 0');
+} catch {}
+
+// Migration douce : macros/coût/conservation/brouillons (Lot 8)
+try {
+  const recipeCols = db.prepare("PRAGMA table_info(recipes)").all().map((c) => c.name);
+  const addIfMissing = (name, def) => { if (!recipeCols.includes(name)) db.exec(`ALTER TABLE recipes ADD COLUMN ${def}`); };
+  addIfMissing('calories', 'calories INTEGER');
+  addIfMissing('protein_g', 'protein_g REAL');
+  addIfMissing('carbs_g', 'carbs_g REAL');
+  addIfMissing('fat_g', 'fat_g REAL');
+  addIfMissing('fiber_g', 'fiber_g REAL');
+  addIfMissing('cost_cents', 'cost_cents INTEGER');
+  addIfMissing('storage_instructions', "storage_instructions TEXT DEFAULT ''");
+  addIfMissing('reheat_instructions', "reheat_instructions TEXT DEFAULT ''");
+  addIfMissing('status', "status TEXT DEFAULT 'published'");
 } catch {}
 
 // Ces migrations "douces" au démarrage sont un raccourci propre à SQLite/MVP. Le Lot 1 du

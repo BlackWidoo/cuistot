@@ -6,7 +6,12 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "verify": "node --check server.js && node --check db.js && node --check app.js && npm test"
+    "check": "node --check server.js && node --check db.js && node --check app.js && node --check gamification.js && node --check seed-core.js && node --check config.js && node --check bootstrap.js && node --check middleware/errors.js && node --check middleware/csrf.js && node --check middleware/rateLimit.js && node --check middleware/auth.js && node --check middleware/security.js && node --check middleware/staticGuard.js && node --check services/notifications.js && node --check services/email.js && node --check services/users.js && node --check services/recipes.js && node --check schemas/auth.js && node --check schemas/recipes.js && node --check schemas/moderation.js && node --check routes/health.js && node --check routes/auth.js && node --check routes/recipes.js && node --check routes/social.js && node --check routes/moderation.js && node --check routes/rewards.js && node --check routes/challenges.js && node --check routes/misc.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run check && npm run lint && npm run format:check && npm test"
   },
   "engines": {
     "node": ">=20.0.0 <22.0.0"
@@ -21,5 +26,9 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.0"
   }
 }

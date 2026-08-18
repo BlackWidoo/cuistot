@@ -297,6 +297,40 @@ img{max-width:100%}
 .dyn-row input{flex:1}
 .dyn-row button{background:var(--bg-warm);color:var(--terracotta);width:44px;border-radius:12px;font-size:1.3rem;font-weight:800;flex-shrink:0}
 
+/* ---------- Ingrédients structurés (Lot 8) ---------- */
+.ing-head{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+.ing-row{display:flex;gap:6px;margin-bottom:8px}
+.ing-row .ing-qty{width:64px;flex-shrink:0}
+.ing-row .ing-unit{width:84px;flex-shrink:0}
+.ing-row .ing-label{flex:1;min-width:0}
+.ing-row input{padding:11px 10px;border:2px solid var(--line);border-radius:12px;font-family:inherit;font-size:.92rem;background:#fffdfb;color:var(--ink)}
+.ing-row input:focus{outline:none;border-color:var(--gold)}
+.ing-row .rm{background:var(--bg-warm);color:var(--terracotta);width:38px;border-radius:12px;font-size:1.2rem;font-weight:800;flex-shrink:0}
+[data-theme="dark"] .ing-row input{background:#1a1a1a;color:var(--ink)}
+
+/* ---------- Filtres (Découvrir) ---------- */
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+.filter-row select{flex:1;min-width:110px;padding:9px 10px;border:2px solid var(--line);border-radius:12px;
+  font-family:inherit;font-size:.82rem;font-weight:700;color:var(--ink-soft);background:#fff}
+[data-theme="dark"] .filter-row select{background:#1a1a1a;color:var(--ink)}
+
+/* ---------- Ajusteur de portions ---------- */
+.portion-adjust{display:flex;align-items:center;gap:10px;font-size:.85rem;font-weight:700;color:var(--ink-soft)}
+.stepper-btn{width:30px;height:30px;border-radius:50%;background:var(--bg-warm);color:var(--terracotta);
+  font-size:1.1rem;font-weight:800;display:grid;place-items:center}
+.stepper-btn:active{transform:scale(.92)}
+
+/* ---------- Nutrition & coût ---------- */
+.nutri-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px}
+.nutri-item{background:var(--bg-warm);border-radius:14px;padding:10px 8px;text-align:center}
+.nutri-val{font-weight:800;font-size:1.05rem;color:var(--terracotta)}
+.nutri-label{font-size:.7rem;color:var(--ink-soft);font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+
+/* ---------- Liste de courses ---------- */
+.shopping-item{display:flex;align-items:center;gap:10px;padding:8px 2px;font-size:.92rem;cursor:pointer}
+.shopping-item input{width:18px;height:18px;accent-color:var(--terracotta);flex-shrink:0}
+.shopping-item.checked span{color:var(--ink-soft);text-decoration:line-through}
+
 /* ---------- Toast & modal ---------- */
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(30px);z-index:100;
   background:#262626;color:#fff;padding:13px 20px;border-radius:16px;font-weight:700;font-size:.92rem;
@@ -371,6 +405,31 @@ img{max-width:100%}
 
 /* ---------- Photos réelles ---------- */
 .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+
+/* ---------- Création guidée en étapes (Lot 6) ---------- */
+.wiz-progress{display:flex;justify-content:space-between;gap:4px;margin-bottom:20px}
+.wiz-dot{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;text-align:center}
+.wiz-dot-num{width:28px;height:28px;border-radius:50%;background:var(--cream);color:var(--ink-soft);
+  font-weight:800;font-size:.85rem;display:grid;place-items:center;transition:background .15s,color .15s}
+.wiz-dot-label{font-size:.68rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px}
+.wiz-dot.active .wiz-dot-num{background:var(--terracotta);color:#fff}
+.wiz-dot.active .wiz-dot-label{color:var(--ink)}
+.wiz-dot.done .wiz-dot-num{background:var(--olive);color:#fff}
+.wiz-step{animation:viewIn .18s ease-out}
+.wiz-nav{display:flex;gap:10px;margin-top:18px}
+.wiz-nav .btn{flex:1}
+
+/* ---------- Onboarding (Lot 6) — s'appuie sur .modal/.modal-overlay existants ---------- */
+.onb-ic{width:56px;height:56px;border-radius:16px;background:var(--bg-warm);display:flex;
+  align-items:center;justify-content:center;margin:0 auto 14px;color:var(--terracotta)}
+.onb-modal p{color:var(--ink-soft);font-size:.92rem;line-height:1.5;margin:8px 0 18px}
+.onb-dots{display:flex;gap:6px;justify-content:center;margin-bottom:18px}
+.onb-dots span{width:7px;height:7px;border-radius:50%;background:var(--line);transition:width .15s,border-radius .15s}
+.onb-dots span.active{background:var(--terracotta);width:18px;border-radius:4px}
+.onb-actions{display:flex;gap:10px}
+.onb-actions .btn{flex:1}
+.onb-skip{text-align:center;margin-top:12px}
+.onb-skip button{color:var(--ink-soft);font-size:.85rem;font-weight:700}
 .recipe-cover.has-photo,.detail-cover.has-photo{filter:none}
 .recipe-cover.has-photo::before,.detail-cover.has-photo::before{
   background:linear-gradient(to top,rgba(0,0,0,.28),transparent 45%);z-index:1}

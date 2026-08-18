@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Pas de cache npm ici : ça repose sur package-lock.json, qu'on n'a pas encore
+          # (généré à la première exécution de `npm install` sur une machine avec Node).
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Vérifier le formatage (Prettier)
+        run: npm run format:check
+
+      - name: Vérifier la syntaxe
+        run: npm run check
+
+      - name: Tests
+        run: npm test
