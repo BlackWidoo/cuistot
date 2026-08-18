@@ -176,8 +176,8 @@ function shell(content) {
     <main class="container fade-in" id="viewRoot">${content}</main>
     <nav class="bottomnav"><div class="bottomnav-inner">
       ${nav.map(([v, ic, label]) => `
-        <button class="nav-item ${v==='create'?'add':''} ${App.state.view===v?'active':''}" data-go="${v}">
-          <span class="ic">${ic}</span>${label?`<span>${label}</span>`:''}
+        <button class="nav-item ${v==='create'?'add':''} ${App.state.view===v?'active':''}" data-go="${v}" title="${label||v}" aria-label="${label||v}">
+          <span class="ic">${ic}</span>
         </button>`).join('')}
     </div></nav>`;
   App.el.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
@@ -221,29 +221,60 @@ async function refreshMe() {
    ============================================================ */
 function recipeCard(r) {
   return `
-  <article class="card recipe" data-recipe="${r.id}">
+  <article class="recipe" data-recipe="${r.id}">
     <div class="recipe-head">
       <div class="mini-avatar" data-user="${r.author.id}">${r.author.avatar}</div>
-      <div><div class="who" data-user="${r.author.id}">${esc(r.author.username)}</div>
-        <div class="when">${timeAgo(r.created_at)}</div></div>
+      <div class="who" data-user="${r.author.id}">${esc(r.author.username)}</div>
+      <span class="cat-tag">${esc(r.category)}</span>
     </div>
     <div class="recipe-cover ${r.photo?'has-photo':''}" data-open="${r.id}" style="${coverStyle(r.category)}">
-      <span class="cat">${esc(r.category)}</span>
-      <span class="diff">${esc(r.difficulty)}</span>
       ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.recipe-cover').classList.remove('has-photo');this.remove()">` : r.image}
     </div>
+    <div class="recipe-actions">
+      <button class="act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${r.liked?'❤️':'🤍'}</span></button>
+      <button class="act" data-open="${r.id}"><span class="ic">💬</span></button>
+      <button class="act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${r.bookmarked?'🔖':'📑'}</span></button>
+    </div>
     <div class="recipe-body" data-open="${r.id}">
+      <div class="likes-line">${r.likes} mention${r.likes>1?'s':''} j'aime</div>
+      <h3><span class="who-inline">${esc(r.author.username)}</span>${esc(r.title)}</h3>
+      <p class="desc">${esc(r.description)}</p>
+      ${r.comments>0?`<div class="see-comments" data-open="${r.id}">Voir les ${r.comments} commentaire${r.comments>1?'s':''}</div>`:''}
+      <div class="when-row">${timeAgo(r.created_at)}</div>
+    </div>
+  </article>`;
+}
+
+function swipeSlide(r) {
+  return `
+  <section class="swipe-slide" data-recipe="${r.id}">
+    <div class="swipe-media ${r.photo?'has-photo':''}" data-open="${r.id}" style="${coverStyle(r.category)}">
+      ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.swipe-media').classList.remove('has-photo');this.remove()">` : `<div class="swipe-emoji">${r.image}</div>`}
+    </div>
+    <div class="swipe-rail">
+      <button class="act rail-act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${r.liked?'❤️':'🤍'}</span><span class="cnt">${r.likes}</span></button>
+      <button class="act rail-act" data-open="${r.id}"><span class="ic">💬</span><span class="cnt">${r.comments}</span></button>
+      <button class="act rail-act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${r.bookmarked?'🔖':'📑'}</span></button>
+    </div>
+    <div class="swipe-info" data-open="${r.id}">
+      <div class="swipe-head">
+        <span class="mini-avatar" data-user="${r.author.id}">${r.author.avatar}</span>
+        <span class="who" data-user="${r.author.id}">${esc(r.author.username)}</span>
+        <span class="cat-tag">${esc(r.category)}</span>
+      </div>
       <h3>${esc(r.title)}</h3>
       <p class="desc">${esc(r.description)}</p>
       <div class="meta-row"><span>⏱ ${r.prep_minutes} min</span><span>🍽 ${r.servings} pers.</span></div>
-      ${r.tags.length?`<div class="tags">${r.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:''}
+      <div class="swipe-cta">Voir la recette</div>
     </div>
-    <div class="recipe-actions">
-      <button class="act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${r.liked?'❤️':'🤍'}</span> ${r.likes}</button>
-      <button class="act" data-open="${r.id}"><span class="ic">💬</span> ${r.comments}</button>
-      <button class="act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${r.bookmarked?'🔖':'📑'}</span> ${r.bookmarked?'Enregistré':'Enregistrer'}</button>
-    </div>
-  </article>`;
+  </section>`;
+}
+
+/* ---------- Squelettes « shimmer » pour le fil swipe ---------- */
+function skeletonSwipe(n = 2) {
+  let s = '';
+  for (let i = 0; i < n; i++) s += `<section class="swipe-slide"><div class="swipe-media shine"></div></section>`;
+  return s;
 }
 
 function wireRecipeCards(root) {
@@ -253,9 +284,12 @@ function wireRecipeCards(root) {
     ev.stopPropagation();
     haptic();
     try {
+      const hadCnt = !!e.querySelector('.cnt');
       const d = await api(`/recipes/${e.dataset.like}/like`, { method: 'POST' });
       e.classList.toggle('liked', d.liked);
-      e.innerHTML = `<span class="ic">${d.liked?'❤️':'🤍'}</span> ${d.likes}`;
+      e.innerHTML = `<span class="ic">${d.liked?'❤️':'🤍'}</span>${hadCnt ? `<span class="cnt">${d.likes}</span>` : ''}`;
+      const likesLine = e.closest('.recipe')?.querySelector('.likes-line');
+      if (likesLine) likesLine.textContent = `${d.likes} mention${d.likes>1?'s':''} j'aime`;
       await refreshPoints();
     } catch (err) { toast(err.message); }
   });
@@ -264,7 +298,7 @@ function wireRecipeCards(root) {
     try {
       const d = await api(`/recipes/${e.dataset.bm}/bookmark`, { method: 'POST' });
       e.classList.toggle('saved', d.bookmarked);
-      e.innerHTML = `<span class="ic">${d.bookmarked?'🔖':'📑'}</span> ${d.bookmarked?'Enregistré':'Enregistrer'}`;
+      e.innerHTML = `<span class="ic">${d.bookmarked?'🔖':'📑'}</span>`;
       toast(d.bookmarked ? 'Ajouté à tes favoris' : 'Retiré des favoris');
     } catch (err) { toast(err.message); }
   });
@@ -286,15 +320,16 @@ async function refreshPoints() {
    ============================================================ */
 async function viewFeed(mode = 'all') {
   shell(`
-    <div class="section-title serif">Le fil gourmand</div>
-    <div class="chips" id="feedChips">
-      <button class="chip ${mode==='all'?'active':''}" data-mode="all">Découverte</button>
-      <button class="chip ${mode==='feed'?'active':''}" data-mode="feed">Mes abonnements</button>
-      <button class="chip ${mode==='popular'?'active':''}" data-mode="popular">Populaires</button>
-    </div>
-    <div id="feedList">${skeletonCards(3)}</div>`);
+    <div class="swipefeed">
+      <div class="swipe-tabs" id="feedChips">
+        <button class="stab ${mode==='all'?'active':''}" data-mode="all">Découverte</button>
+        <button class="stab ${mode==='feed'?'active':''}" data-mode="feed">Abonnements</button>
+        <button class="stab ${mode==='popular'?'active':''}" data-mode="popular">Populaires</button>
+      </div>
+      <div id="feedList" class="swipe-list">${skeletonSwipe()}</div>
+    </div>`);
 
-  document.querySelectorAll('#feedChips .chip').forEach((c) => c.onclick = () => viewFeed(c.dataset.mode));
+  document.querySelectorAll('#feedChips .stab').forEach((c) => c.onclick = () => viewFeed(c.dataset.mode));
 
   let path = '/recipes';
   if (mode === 'feed') path += '?feed=1';
@@ -304,11 +339,11 @@ async function viewFeed(mode = 'all') {
     const list = document.getElementById('feedList');
     if (!recipes.length) {
       list.innerHTML = mode === 'feed'
-        ? `<div class="empty"><div class="big">🍽️</div><p>Suis des chefs pour voir leurs recettes ici.</p></div>`
-        : `<div class="empty"><div class="big">🍽️</div><p>Aucune recette pour l'instant.</p></div>`;
+        ? `<div class="empty swipe-empty"><div class="big">🍽️</div><p>Suis des chefs pour voir leurs recettes ici.</p></div>`
+        : `<div class="empty swipe-empty"><div class="big">🍽️</div><p>Aucune recette pour l'instant.</p></div>`;
       return;
     }
-    list.innerHTML = recipes.map(recipeCard).join('');
+    list.innerHTML = recipes.map(swipeSlide).join('');
     wireRecipeCards(list);
   } catch (err) { toast(err.message); }
 }
@@ -879,7 +914,7 @@ function toggleTheme() {
   const tb = document.getElementById('themeBtn');
   if (tb) tb.textContent = next === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre';
 }
-applyTheme(localStorage.getItem('cuistot_theme') || 'light');
+applyTheme(localStorage.getItem('cuistot_theme') || 'dark');
 
 // Enregistre le service worker pour l'installation mobile (PWA)
 if ('serviceWorker' in navigator) {
