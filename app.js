@@ -66,6 +66,25 @@ const CAT_GRAD = {
 };
 const coverStyle = (cat) => `background:${CAT_GRAD[cat] || CAT_GRAD['Autre']}`;
 
+/* ---------- Icônes (SVG traits fins, pas d'emoji pour les boutons/nav) ---------- */
+const ICONS = {
+  home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9"/><path d="M9.5 20v-6h5v6"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a3 3 0 0 0 3 5"/><path d="M17 5h3a3 3 0 0 1-3 5"/><path d="M12 13v3"/><path d="M9 20h6"/><path d="M10 16.5h4l.5 3.5h-5l.5-3.5Z"/>',
+  user: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6"/>',
+  userplus: '<circle cx="10" cy="8" r="3.4"/><path d="M3.5 20c1.2-3.6 3.7-5.4 6.5-5.4s5.3 1.8 6.5 5.4"/><path d="M18 8v5M15.5 10.5h5"/>',
+  bell: '<path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+  heart: '<path d="M12 20.5s-7.5-4.6-9.8-9.4C.7 7.7 2 4.4 5.3 3.6c2.1-.5 4.1.4 5.2 2.2h2.9c1.1-1.8 3.1-2.7 5.2-2.2 3.3.8 4.6 4.1 3.1 7.5-2.3 4.8-9.7 9.4-9.7 9.4Z"/>',
+  comment: '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4.5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>',
+  bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z"/>',
+};
+function icon(name, opts = {}) {
+  const inner = ICONS[name] || '';
+  const filled = !!opts.filled;
+  return `<svg class="svgic" viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="${filled ? 'none' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
 /* ---------- Retour haptique (mobile) ---------- */
 function haptic(ms = 12) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} }
 
@@ -159,18 +178,18 @@ function renderAuth(tab = 'login') {
 function shell(content) {
   const u = App.state.user;
   const nav = [
-    ['feed', '🏠', 'Fil'],
-    ['discover', '🔍', 'Découvrir'],
-    ['create', '➕', ''],
-    ['challenges', '🏆', 'Défis'],
-    ['profile', '👤', 'Profil'],
+    ['feed', icon('home'), 'Fil'],
+    ['discover', icon('search'), 'Découvrir'],
+    ['create', icon('plus'), 'Publier'],
+    ['challenges', icon('trophy'), 'Défis'],
+    ['profile', icon('user'), 'Profil'],
   ];
   App.el.innerHTML = `
     <header class="topbar"><div class="topbar-inner">
       <div class="logo"><span class="dot">🍳</span>Cuistot</div>
       <div class="spacer"></div>
       <button class="points-pill" data-go="rewards">${u.points} pts</button>
-      <button class="bell-btn" data-go="notifications">🔔<span class="bell-badge" id="bellBadge" hidden>0</span></button>
+      <button class="bell-btn" data-go="notifications">${icon('bell')}<span class="bell-badge" id="bellBadge" hidden>0</span></button>
       <button class="avatar-btn" data-go="profile">${u.avatar}</button>
     </div></header>
     <main class="container fade-in" id="viewRoot">${content}</main>
@@ -231,9 +250,9 @@ function recipeCard(r) {
       ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.recipe-cover').classList.remove('has-photo');this.remove()">` : r.image}
     </div>
     <div class="recipe-actions">
-      <button class="act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${r.liked?'❤️':'🤍'}</span></button>
-      <button class="act" data-open="${r.id}"><span class="ic">💬</span></button>
-      <button class="act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${r.bookmarked?'🔖':'📑'}</span></button>
+      <button class="act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${icon('heart',{filled:r.liked})}</span></button>
+      <button class="act" data-open="${r.id}"><span class="ic">${icon('comment')}</span></button>
+      <button class="act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${icon('bookmark',{filled:r.bookmarked})}</span></button>
     </div>
     <div class="recipe-body" data-open="${r.id}">
       <div class="likes-line">${r.likes} mention${r.likes>1?'s':''} j'aime</div>
@@ -252,9 +271,9 @@ function swipeSlide(r) {
       ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.swipe-media').classList.remove('has-photo');this.remove()">` : `<div class="swipe-emoji">${r.image}</div>`}
     </div>
     <div class="swipe-rail">
-      <button class="act rail-act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${r.liked?'❤️':'🤍'}</span><span class="cnt">${r.likes}</span></button>
-      <button class="act rail-act" data-open="${r.id}"><span class="ic">💬</span><span class="cnt">${r.comments}</span></button>
-      <button class="act rail-act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${r.bookmarked?'🔖':'📑'}</span></button>
+      <button class="act rail-act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${icon('heart',{filled:r.liked})}</span><span class="cnt">${r.likes}</span></button>
+      <button class="act rail-act" data-open="${r.id}"><span class="ic">${icon('comment')}</span><span class="cnt">${r.comments}</span></button>
+      <button class="act rail-act bm ${r.bookmarked?'saved':''}" data-bm="${r.id}"><span class="ic">${icon('bookmark',{filled:r.bookmarked})}</span></button>
     </div>
     <div class="swipe-info" data-open="${r.id}">
       <div class="swipe-head">
@@ -287,7 +306,7 @@ function wireRecipeCards(root) {
       const hadCnt = !!e.querySelector('.cnt');
       const d = await api(`/recipes/${e.dataset.like}/like`, { method: 'POST' });
       e.classList.toggle('liked', d.liked);
-      e.innerHTML = `<span class="ic">${d.liked?'❤️':'🤍'}</span>${hadCnt ? `<span class="cnt">${d.likes}</span>` : ''}`;
+      e.innerHTML = `<span class="ic">${icon('heart',{filled:d.liked})}</span>${hadCnt ? `<span class="cnt">${d.likes}</span>` : ''}`;
       const likesLine = e.closest('.recipe')?.querySelector('.likes-line');
       if (likesLine) likesLine.textContent = `${d.likes} mention${d.likes>1?'s':''} j'aime`;
       await refreshPoints();
@@ -298,7 +317,7 @@ function wireRecipeCards(root) {
     try {
       const d = await api(`/recipes/${e.dataset.bm}/bookmark`, { method: 'POST' });
       e.classList.toggle('saved', d.bookmarked);
-      e.innerHTML = `<span class="ic">${d.bookmarked?'🔖':'📑'}</span>`;
+      e.innerHTML = `<span class="ic">${icon('bookmark',{filled:d.bookmarked})}</span>`;
       toast(d.bookmarked ? 'Ajouté à tes favoris' : 'Retiré des favoris');
     } catch (err) { toast(err.message); }
   });
@@ -355,7 +374,7 @@ async function viewDiscover(preset = '') {
   shell(`
     <div class="section-title serif">Découvrir</div>
     <div class="searchbar">
-      <span>🔎</span>
+      <span>${icon('search')}</span>
       <input id="searchInput" placeholder="Recette, ingrédient, tag…" value="${esc(preset)}">
     </div>
     <div class="chips" id="catChips">
@@ -555,7 +574,7 @@ async function viewRecipe(id) {
           <p class="muted">${esc(r.description)}</p>
           ${r.tags.length?`<div class="tags" style="margin-top:10px">${r.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:''}
           <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-            <button class="btn ${r.liked?'gold':''} small" id="likeBtn">${r.liked?'❤️ Aimé':'🤍 J\'aime'} · ${r.likes}</button>
+            <button class="btn ${r.liked?'gold':''} small" id="likeBtn"><span class="ic">${icon('heart',{filled:r.liked})}</span> ${r.liked?'Aimé':'J\'aime'} · ${r.likes}</button>
             <button class="btn ghost small" id="bmBtn">${r.bookmarked?'Enregistré':'Enregistrer'}</button>
           </div>
           ${r.is_mine?`<div style="display:flex;gap:10px;margin-top:10px">
@@ -568,7 +587,7 @@ async function viewRecipe(id) {
           <div class="detail-section"><h3 class="serif">Préparation</h3>
             <ol class="step-list">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('') || '<li class="muted">Non précisé</li>'}</ol></div>
 
-          <div class="detail-section"><h3 class="serif">💬 Commentaires (${r.commentList.length})</h3>
+          <div class="detail-section"><h3 class="serif">${icon('comment')} Commentaires (${r.commentList.length})</h3>
             <div id="commentList">${r.commentList.map(commentHtml).join('') || '<p class="muted">Sois le premier à commenter.</p>'}</div>
             <form class="comment-form" id="commentForm">
               <input name="body" placeholder="Ton avis gourmand…" required>
@@ -586,7 +605,7 @@ async function viewRecipe(id) {
       const d = await api(`/recipes/${id}/like`, { method: 'POST' });
       const b = document.getElementById('likeBtn');
       b.className = 'btn small ' + (d.liked ? 'gold' : '');
-      b.innerHTML = (d.liked ? '❤️ Aimé' : '🤍 J\'aime') + ' · ' + d.likes;
+      b.innerHTML = `<span class="ic">${icon('heart',{filled:d.liked})}</span> ${d.liked ? 'Aimé' : 'J\'aime'} · ${d.likes}`;
       await refreshPoints();
     };
 
@@ -854,7 +873,7 @@ async function viewLeaderboard() {
 /* ============================================================
    NOTIFICATIONS
    ============================================================ */
-const NOTIF_ICON = { like: '❤️', comment: '💬', follow: '👥', challenge: '🏆' };
+const NOTIF_ICON = { like: icon('heart',{filled:true}), comment: icon('comment'), follow: icon('userplus'), challenge: icon('trophy') };
 async function viewNotifications() {
   App.state.view = '';
   shell(`
@@ -865,7 +884,7 @@ async function viewNotifications() {
     const list = document.getElementById('notifList');
     list.innerHTML = notifications.length ? notifications.map((n) => `
       <div class="card notif ${n.is_read?'':'unread'}" ${n.recipe_id?`data-open="${n.recipe_id}"`:''}>
-        <div class="notif-ic">${NOTIF_ICON[n.type] || '🔔'}</div>
+        <div class="notif-ic">${NOTIF_ICON[n.type] || icon('bell')}</div>
         <div class="notif-body"><div class="notif-text">${esc(n.text)}</div>
           <div class="when">${timeAgo(n.created_at)}</div></div>
         ${n.is_read?'':'<span class="notif-dot"></span>'}
