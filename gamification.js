@@ -58,14 +58,14 @@ function badgesFor(userId) {
   `).get({ id: userId });
 
   const defs = [
-    { key: 'first_recipe', icon: '🍳', name: 'Première recette',  desc: 'Publier ta 1ʳᵉ recette',      ok: stats.recipes >= 1 },
-    { key: 'prolific',     icon: '📚', name: 'Livre de recettes', desc: 'Publier 5 recettes',          ok: stats.recipes >= 5 },
-    { key: 'loved',        icon: '❤️', name: 'Coup de cœur',      desc: 'Recevoir 10 likes',           ok: stats.likes_received >= 10 },
-    { key: 'star',         icon: '🌟', name: 'Star des fourneaux',desc: 'Recevoir 50 likes',           ok: stats.likes_received >= 50 },
-    { key: 'social',       icon: '💬', name: 'Bavard gourmand',   desc: 'Laisser 10 commentaires',     ok: stats.comments >= 10 },
-    { key: 'popular',      icon: '👥', name: 'Populaire',         desc: 'Avoir 5 abonnés',             ok: stats.followers >= 5 },
-    { key: 'challenger',   icon: '🏅', name: 'Challenger',        desc: 'Participer à un défi',        ok: stats.challenges >= 1 },
-    { key: 'legend',       icon: '👑', name: 'Légende',           desc: 'Atteindre 3000 points',       ok: stats.points >= 3000 },
+    { key: 'first_recipe', icon: 'pan',     name: 'Première recette',  desc: 'Publier ta 1ʳᵉ recette',      ok: stats.recipes >= 1 },
+    { key: 'prolific',     icon: 'book',    name: 'Livre de recettes', desc: 'Publier 5 recettes',          ok: stats.recipes >= 5 },
+    { key: 'loved',        icon: 'heart',   name: 'Coup de cœur',      desc: 'Recevoir 10 likes',           ok: stats.likes_received >= 10 },
+    { key: 'star',         icon: 'star',    name: 'Star des fourneaux',desc: 'Recevoir 50 likes',           ok: stats.likes_received >= 50 },
+    { key: 'social',       icon: 'comment', name: 'Bavard gourmand',   desc: 'Laisser 10 commentaires',     ok: stats.comments >= 10 },
+    { key: 'popular',      icon: 'users',   name: 'Populaire',         desc: 'Avoir 5 abonnés',             ok: stats.followers >= 5 },
+    { key: 'challenger',   icon: 'medal',   name: 'Challenger',        desc: 'Participer à un défi',        ok: stats.challenges >= 1 },
+    { key: 'legend',       icon: 'crown',   name: 'Légende',           desc: 'Atteindre 3000 points',       ok: stats.points >= 3000 },
   ];
   return defs.map((d) => ({ ...d, unlocked: d.ok }));
 }

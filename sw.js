@@ -1,6 +1,6 @@
 // Service worker minimal — met en cache la coquille de l'app pour un lancement rapide
 // et un accès hors-ligne basique. Les appels API passent toujours par le réseau.
-const CACHE = 'cuistot-v7';
+const CACHE = 'cuistot-v12';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
