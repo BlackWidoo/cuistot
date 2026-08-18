@@ -462,3 +462,12 @@ img{max-width:100%}
   .sk-cover{height:230px}
   .nav-item .ic{font-size:1.4rem}
 }
+
+/* ---------- Bannière de mise à jour du service worker (Lot 7) ---------- */
+.update-banner{position:fixed;left:16px;right:16px;top:16px;z-index:150;
+  background:var(--ink);color:#fff;border-radius:16px;padding:13px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  box-shadow:var(--shadow-lg);animation:viewIn .25s ease-out;font-size:.88rem;font-weight:700}
+.update-banner button{background:var(--terracotta);color:#fff;padding:8px 14px;border-radius:11px;
+  font-weight:800;font-size:.85rem;flex-shrink:0}
+@media(min-width:680px){.update-banner{left:auto;right:24px;top:24px;max-width:360px}}

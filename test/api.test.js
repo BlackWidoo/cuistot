@@ -567,3 +567,53 @@ test('déconnexion : la session locale devient anonyme (invalidation totale du j
   const after = await s.call('/me');
   assert.equal(after.data.user, null);
 });
+
+// ---------- Lot 11 : SEO (méta-tags par recette, sitemap, robots.txt) ----------
+
+test('GET /recette/:id d\'une recette publiée renvoie le HTML avec le titre injecté dans les méta-tags', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'seo_test', email: `seo_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const created = await s.call('/recipes', { method: 'POST', body: { title: 'Gratin dauphinois de mamie', description: 'Fondant et gratiné.', tags: [] } });
+  const id = created.data.recipe.id;
+
+  const res = await fetch(`${base}/recette/${id}`);
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('<title>Gratin dauphinois de mamie — Cuistot</title>'));
+  assert.ok(html.includes('content="Fondant et gratiné."'));
+  assert.ok(html.includes('<div id="app"></div>')); // toujours la coquille SPA, pas une page à part
+});
+
+test('GET /recette/:id d\'un brouillon ou d\'un id inconnu retombe sur la page générique (pas d\'erreur, pas de fuite)', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'seo_draft_test', email: `seodraft_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const draft = await s.call('/recipes', { method: 'POST', body: { title: 'Brouillon secret', tags: [], status: 'draft' } });
+
+  const resDraft = await fetch(`${base}/recette/${draft.data.recipe.id}`);
+  assert.equal(resDraft.status, 200);
+  const htmlDraft = await resDraft.text();
+  assert.ok(!htmlDraft.includes('Brouillon secret')); // le titre du brouillon ne doit pas fuiter dans les méta publiques
+
+  const resUnknown = await fetch(`${base}/recette/999999`);
+  assert.equal(resUnknown.status, 200); // fallback SPA générique, pas une 500
+});
+
+test('GET /sitemap.xml liste les recettes publiées avec leur URL', async () => {
+  const s = makeSession();
+  await s.call('/register', { method: 'POST', body: { username: 'sitemap_test', email: `sitemap_${Date.now()}@test.fr`, password: 'secret12345' } });
+  const created = await s.call('/recipes', { method: 'POST', body: { title: 'Recette pour sitemap', tags: [] } });
+
+  const res = await fetch(`${base}/sitemap.xml`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') || '', /xml/);
+  const xml = await res.text();
+  assert.ok(xml.includes(`/recette/${created.data.recipe.id}`));
+});
+
+test('GET /robots.txt autorise le crawl public mais interdit /api/', async () => {
+  const res = await fetch(`${base}/robots.txt`);
+  assert.equal(res.status, 200);
+  const txt = await res.text();
+  assert.ok(txt.includes('Disallow: /api/'));
+  assert.ok(txt.includes('Sitemap:'));
+});

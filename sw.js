@@ -1,10 +1,19 @@
 // Service worker minimal — met en cache la coquille de l'app pour un lancement rapide
 // et un accès hors-ligne basique. Les appels API passent toujours par le réseau.
-const CACHE = 'cuistot-v17';
+const CACHE = 'cuistot-v19';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Pas de self.skipWaiting() automatique ici (Lot 7) : une nouvelle version installée reste
+  // "en attente" jusqu'à ce que l'utilisateur confirme via la bannière de mise à jour (voir
+  // app.js), qui envoie le message SKIP_WAITING ci-dessous. C'est la cause du bug déjà vécu en
+  // prod (jeton CSRF "invalide") : l'ancien service worker continuait de servir un app.js
+  // périmé sans jamais prévenir personne. Rendre la mise à jour explicite règle ça à la racine.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {

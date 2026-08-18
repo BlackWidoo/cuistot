@@ -42,6 +42,9 @@ app.use('/api', csrfProtect);
 // ---------- Santé / infra (Lot 0) ----------
 app.use(require('./routes/health'));
 
+// ---------- SEO : méta-tags par recette, sitemap, robots.txt (Lot 11) ----------
+app.use(require('./routes/seo'));
+
 // Actions à exécuter une fois au démarrage (seed + bootstrap admin)
 runBootstrap();
 

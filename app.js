@@ -431,7 +431,59 @@ async function updateBell() {
 /* ============================================================
    NAVIGATION
    ============================================================ */
-async function go(view, arg) {
+// Chemins réels par vue (Lot 11) : permet de partager le lien d'une recette ou d'un profil
+// (avant ce lot, l'URL restait toujours "/" quelle que soit la vue affichée — impossible à
+// partager, et impossible à indexer). `recipe` sans id n'a pas de chemin dédié (ne devrait
+// jamais arriver en pratique, seul viewCreate(edit) appelle la page d'édition hors du routeur).
+function routeUrl(view, arg) {
+  switch (view) {
+    case 'feed': return '/';
+    case 'discover': return '/decouvrir';
+    case 'create': return '/creer';
+    case 'challenges': return '/defis';
+    case 'rewards': return '/recompenses';
+    case 'profile': return '/profil';
+    case 'user': return arg ? `/profil/${arg}` : '/profil';
+    case 'recipe': return arg ? `/recette/${arg}` : null;
+    case 'leaderboard': return '/classement';
+    case 'notifications': return '/notifications';
+    case 'bookmarks': return '/carnet';
+    case 'moderation': return '/moderation';
+    case 'legal': return arg ? `/legal/${arg}` : '/legal';
+    case 'drafts': return '/brouillons';
+    default: return null;
+  }
+}
+// Chemin -> {view, arg} : utilisé au chargement initial (boot) et pour restaurer l'état sur un
+// retour arrière/avant du navigateur sans état mémorisé (rechargement de page par ex.).
+function parseRoute(pathname) {
+  const segs = pathname.split('/').filter(Boolean);
+  if (!segs.length) return { view: 'feed' };
+  const simple = {
+    decouvrir: 'discover', creer: 'create', defis: 'challenges', recompenses: 'rewards',
+    classement: 'leaderboard', notifications: 'notifications', carnet: 'bookmarks',
+    moderation: 'moderation', brouillons: 'drafts',
+  };
+  if (segs[0] === 'recette' && segs[1]) return { view: 'recipe', arg: segs[1] };
+  if (segs[0] === 'profil') return segs[1] ? { view: 'user', arg: segs[1] } : { view: 'profile' };
+  if (segs[0] === 'legal') return { view: 'legal', arg: segs[1] };
+  if (simple[segs[0]]) return { view: simple[segs[0]] };
+  return null;
+}
+const PAGE_TITLES = {
+  feed: 'Fil', discover: 'Découvrir', create: 'Nouvelle recette', challenges: 'Défis',
+  rewards: 'Récompenses', profile: 'Mon profil', leaderboard: 'Classement',
+  notifications: 'Notifications', bookmarks: 'Mon carnet', moderation: 'Modération',
+  drafts: 'Mes brouillons', legal: 'Informations légales', recipe: 'Recette', user: 'Profil',
+};
+// Les pages recette/profil affinent ce titre générique une fois les données chargées
+// (voir viewRecipe/renderProfile) avec le vrai nom, plus utile dans l'historique/les favoris.
+function setTitle(t) { document.title = t ? `${t} — Cuistot` : 'Cuistot — le réseau des gourmands'; }
+
+// opts.history : 'push' (défaut, navigation normale) | 'replace' (état initial au chargement,
+// ne doit pas empiler une entrée) | 'none' (déjà géré par le navigateur — retour/avance, voir
+// l'écouteur popstate plus bas).
+async function go(view, arg, opts = {}) {
   App.state.view = view;
   window.scrollTo(0, 0);
   const R = {
@@ -441,8 +493,22 @@ async function go(view, arg) {
     notifications: viewNotifications, bookmarks: viewBookmarks,
     moderation: viewModeration, legal: viewLegal, drafts: viewDrafts,
   };
+  const mode = opts.history || 'push';
+  if (mode !== 'none') {
+    const path = routeUrl(view, arg);
+    if (path) {
+      if (mode === 'replace') history.replaceState({ view, arg }, '', path);
+      else if (path !== location.pathname) history.pushState({ view, arg }, '', path);
+    }
+  }
+  setTitle(PAGE_TITLES[view]);
   await (R[view] || viewFeed)(arg);
 }
+window.addEventListener('popstate', (e) => {
+  if (!App.state.user) return; // pas connecté : renderAuth gère son propre écran, rien à restaurer
+  const target = e.state || parseRoute(location.pathname) || { view: 'feed' };
+  go(target.view, target.arg, { history: 'none' });
+});
 
 async function refreshMe() {
   const me = await api('/me');
@@ -983,6 +1049,7 @@ async function viewRecipe(id) {
   App.state.view = 'feed';
   try {
     const { recipe: r } = await api('/recipes/' + id);
+    setTitle(r.title);
     const baseServings = r.servings || 1;
     shell(`
       <button class="back-btn" id="back">← Retour</button>
@@ -1269,6 +1336,7 @@ async function viewUser(id) {
   App.state.view = '';
   try {
     const { user, badges, recipes, isFollowing, isBlocked } = await api('/users/' + id);
+    setTitle(user.username);
     renderProfile(user, badges, { recipes, isFollowing, isBlocked }, false);
   } catch (err) { toast(err.message); }
 }
@@ -1702,9 +1770,45 @@ function toggleTheme() {
 }
 applyTheme(localStorage.getItem('cuistot_theme') || 'dark');
 
-// Enregistre le service worker pour l'installation mobile (PWA)
+// Enregistre le service worker pour l'installation mobile (PWA) + notifie proprement quand une
+// nouvelle version est disponible, au lieu de laisser un onglet ouvert tourner indéfiniment sur
+// un app.js périmé (Lot 7 — cause du bug CSRF déjà rencontré en prod : le service worker ne
+// prévenait jamais personne d'une mise à jour).
+function showUpdateBanner(reg) {
+  if (document.getElementById('updateBanner')) return; // pas de doublon si l'événement se redéclenche
+  const el = document.createElement('div');
+  el.id = 'updateBanner';
+  el.className = 'update-banner';
+  el.innerHTML = `<span>Nouvelle version de Cuistot disponible.</span><button type="button" id="updateBtn">Actualiser</button>`;
+  document.body.appendChild(el);
+  document.getElementById('updateBtn').onclick = () => {
+    el.querySelector('#updateBtn').textContent = '…';
+    reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
+  };
+}
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+      reg.addEventListener('updatefound', () => {
+        const fresh = reg.installing;
+        if (!fresh) return;
+        fresh.addEventListener('statechange', () => {
+          // "installed" + un controller déjà actif = vraie mise à jour (pas le tout premier
+          // enregistrement du service worker, qui n'a encore rien à remplacer).
+          if (fresh.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(reg);
+        });
+      });
+    }).catch(() => {});
+  });
+  // Une fois que le nouveau service worker prend la main (après le clic "Actualiser"), recharge
+  // une seule fois pour charger le nouvel app.js.
+  let reloadedForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForUpdate) return;
+    reloadedForUpdate = true;
+    window.location.reload();
+  });
 }
 
 /* ============================================================
@@ -1714,6 +1818,12 @@ if ('serviceWorker' in navigator) {
   const resetToken = new URLSearchParams(location.search).get('reset');
   if (resetToken) { renderResetPassword(resetToken); return; }
   try { await refreshMe(); } catch {}
-  if (App.state.user) { go('feed'); return; }
+  if (App.state.user) {
+    // Restaure la vue depuis l'URL (lien de recette partagé, page rechargée...) au lieu de
+    // toujours retomber sur le fil (Lot 11 — deep linking).
+    const initial = parseRoute(location.pathname) || { view: 'feed' };
+    go(initial.view, initial.arg, { history: 'replace' });
+    return;
+  }
   renderAuth('login');
 })();

@@ -244,6 +244,55 @@ modification de test nécessaire pour cette refonte.
   overlays pointant des éléments réels de l'interface (plus complexe, risque plus élevé sans
   pouvoir tester dans un navigateur ici).
 
+## PWA hors-ligne (Lot 7)
+
+- **Mise à jour explicite** : le service worker (`sw.js`) n'appelle plus `self.skipWaiting()`
+  automatiquement à l'installation. Une nouvelle version reste "en attente" jusqu'à ce que
+  l'utilisateur clique sur la bannière "Nouvelle version disponible" qui apparaît en haut de
+  l'écran — c'est ce clic qui envoie le message `SKIP_WAITING` au service worker et déclenche
+  le rechargement. **C'est la correction directe du bug déjà rencontré en prod** ("jeton de
+  sécurité manquant ou invalide") : l'ancien service worker continuait de servir un `app.js`
+  périmé sans jamais prévenir personne. Ça ne peut plus arriver silencieusement maintenant.
+- **Repli hors-ligne** : déjà en place depuis le premier jet du service worker (sert
+  `index.html` en cache si le réseau est indisponible et que la page demandée n'est pas déjà en
+  cache) — adapté à une SPA, pas de changement nécessaire ici.
+- **Non fait dans ce lot — icônes PNG 192/512** : le manifest ne référence aujourd'hui qu'un
+  `icon.svg`. Ça fonctionne pour l'installation sur Android/Chrome, mais **iOS Safari ignore les
+  icônes SVG pour "Ajouter à l'écran d'accueil"** — sans PNG, iOS affiche une capture d'écran
+  de la page à la place de l'icône. Je n'ai pas pu générer de vrais fichiers PNG depuis cet
+  environnement (pas de Node.js, pas d'outil de rendu d'image disponible ici — écrire des octets
+  binaires PNG "à la main" via un outil texte produirait un fichier corrompu). Pour corriger ça
+  quand tu auras l'occasion : ouvre `icon.svg` dans n'importe quel convertisseur SVG→PNG (il en
+  existe des gratuits en ligne), exporte en 192×192 et 512×512, dépose les fichiers
+  `icon-192.png` et `icon-512.png` à la racine du projet, puis ajoute-les à `manifest.json`
+  (tableau `icons`) et en `apple-touch-icon` dans `index.html` à la place de `/icon.svg`.
+
+## SEO (Lot 11)
+
+- **Liens de recette partageables** : avant ce lot, l'URL affichait toujours `/` quelle que
+  soit la page ouverte dans l'app (SPA sans routage d'URL) — impossible de partager le lien
+  d'une recette précise, impossible à indexer. Chaque vue a maintenant une vraie URL
+  (`/recette/12`, `/profil/5`, `/decouvrir`...), gérée par `history.pushState` côté client ;
+  recharger la page ou utiliser retour/avance du navigateur restaure la bonne vue. Un seul
+  endroit changé (`go()`, la fonction de routage déjà utilisée partout dans l'app) — aucun des
+  appels existants à `go(vue, id)` n'a eu besoin d'être modifié.
+- **Méta-tags dynamiques par recette** : `GET /recette/:id` (nouvelle route serveur,
+  `routes/seo.js`) sert la même coquille HTML que toute autre page, mais avec `<title>`,
+  description, Open Graph et Twitter Card remplis avec le vrai titre/la vraie description/la
+  vraie photo de la recette — l'aperçu de partage (WhatsApp, réseaux sociaux) affiche enfin la
+  bonne chose. Un brouillon ou une recette masquée ne fuite jamais dans ces méta-tags (retombe
+  sur la page générique). Limite connue : une photo uploadée par un utilisateur est stockée en
+  base64 (data URI), inutilisable comme `og:image` — seules les photos avec une vraie URL
+  (recettes de démo) ont un aperçu avec image ; ça se résoudra avec le Lot 2 (upload externe).
+- **`sitemap.xml`** (généré à la volée) : liste uniquement les recettes publiées et visibles —
+  le reste de l'app (fil, création, profils) est derrière un compte, pas de vocation à être
+  indexé. **`robots.txt`** : autorise le crawl public, interdit `/api/`.
+- **Titres de page dynamiques** : l'onglet du navigateur affiche maintenant "Nom de la recette
+  — Cuistot" ou "Pseudo — Cuistot" plutôt que toujours le même titre générique.
+- **Non fait dans ce lot** : analytics (compteur de vues, tableau de bord) — pas abordé pour
+  garder ce lot concentré sur le référencement pur ; peut se faire plus tard sans compte
+  externe (compteur maison en base, comme le reste de la gamification).
+
 ## Statut des lots (brief de mise en production)
 
 - [x] **Lot 0 — Débloquer le déploiement** : `JWT_SECRET` obligatoire en prod, écoute sur
@@ -267,8 +316,16 @@ modification de test nécessaire pour cette refonte.
   tests étendus (voir détail ci-dessus). Reste : Playwright/E2E, staging dédié.
 - [x] **Lot 5 — Refonte architecture** : `server.js` découpé en `config/middleware/services/
   schemas/routes` (voir détail ci-dessus), aucun changement de comportement.
-- [x] **Lot 6 — Design/UX produit** : voir détail ci-dessous.
-- [ ] **Lots 7, 11** : PWA hors-ligne, SEO/analytics.
+- [x] **Lot 6 — Design/UX produit** : voir détail ci-dessus.
+- [x] **Lot 7 — PWA hors-ligne** : mise à jour explicite du service worker (voir détail
+  ci-dessus). Reste : icônes PNG 192/512 (nécessite un outil de rendu d'image, indisponible ici).
+- [x] **Lot 11 — SEO** : liens de recette partageables, méta-tags dynamiques, sitemap/robots.txt,
+  titres de page (voir détail ci-dessus). Reste : analytics (compteur de vues).
+
+Tous les lots du brief sont maintenant traités, sauf ceux qui nécessitent un compte externe
+(Lot 1 — PostgreSQL, reporté par choix produit ; Lot 2 — upload médias ; Lot 3 — email réel) et
+les quelques items listés "Reste" ci-dessus dans chaque lot. Chaque lot a été livré avec son
+code, ses tests et une note de déploiement dédiée — voir le détail complet plus haut.
 
 Chaque lot suivant sera livré avec son code, sa migration, ses tests et une note de
 déploiement dédiée — voir le brief pour le détail complet de chaque lot.
