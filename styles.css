@@ -278,6 +278,7 @@ img{max-width:100%}
 .comment .cbody{background:var(--bg-warm);padding:10px 13px;border-radius:14px;flex:1}
 .comment .cname{font-weight:800;font-size:.85rem}
 .comment .ctext{font-size:.92rem;margin-top:2px}
+.report-link{font-size:.72rem;color:var(--ink-soft);margin-top:4px;text-decoration:underline}
 .comment-form{display:flex;gap:8px;margin-top:12px}
 .comment-form input{flex:1;padding:12px 14px;border:2px solid var(--line);border-radius:13px;font-family:inherit;font-size:.95rem;background:#fff}
 .comment-form input:focus{outline:none;border-color:var(--gold)}

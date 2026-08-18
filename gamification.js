@@ -5,11 +5,23 @@ const db = require('./db');
 const POINTS = {
   PUBLISH_RECIPE: 25,   // publier une recette
   RECEIVE_LIKE:   5,    // un de tes plats reçoit un like
-  GIVE_LIKE:      1,    // tu likes un plat
-  COMMENT:        3,    // tu commentes
+  GIVE_LIKE:      0,    // liker ne rapporte plus rien (évitait le farming like/unlike) — Lot 9
+  COMMENT:        3,    // tu commentes (sous réserve d'un commentaire non trivial, voir server.js)
   RECEIVE_FOLLOW: 10,   // quelqu'un te suit
   COMPLETE_CHALLENGE: 50, // valeur par défaut (override par défi)
   DAILY_LOGIN:    5,
+};
+
+// Raisons de points soumises à un plafond quotidien (Lot 9 — anti-farming). L'action elle-même
+// (recevoir un like, commenter) n'est jamais bloquée : seul l'octroi de points au-delà du
+// plafond du jour est silencieusement ignoré.
+const REASONS = {
+  RECEIVE_LIKE: 'Ta recette a été likée',
+  COMMENT: 'Commentaire posté',
+};
+const DAILY_CAPS = {
+  [REASONS.RECEIVE_LIKE]: 100, // ~20 likes reçus/jour avant plafond, au barème actuel
+  [REASONS.COMMENT]: 30,       // ~10 commentaires/jour avant plafond, au barème actuel
 };
 
 // Niveaux — seuils cumulés
@@ -33,15 +45,39 @@ function levelFor(points) {
   return { ...current, next, progress, points };
 }
 
-// Attribue des points à un utilisateur et journalise l'événement
+// Attribue des points à un utilisateur et journalise l'événement. Le solde ne descend jamais
+// sous 0 (ex: un retrait de like plafonné par le farming-cap ne doit pas passer l'auteur en
+// négatif) ; l'événement journalisé garde le montant nominal demandé, pour un historique lisible.
 function award(userId, amount, reason) {
   if (!amount) return;
   const tx = db.transaction(() => {
-    db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run(amount, userId);
+    db.prepare('UPDATE users SET points = MAX(0, points + ?) WHERE id = ?').run(amount, userId);
     db.prepare('INSERT INTO point_events (user_id, amount, reason) VALUES (?,?,?)')
       .run(userId, amount, reason);
   });
   tx();
+}
+
+// Total déjà gagné aujourd'hui (dernières 24h glissantes) pour une raison donnée
+function dailyEarned(userId, reason) {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(amount),0) c FROM point_events
+    WHERE user_id=? AND reason=? AND amount>0 AND created_at >= datetime('now','-1 day')
+  `).get(userId, reason);
+  return row.c;
+}
+
+// Comme award(), mais plafonne le total gagné par jour pour les raisons listées dans
+// DAILY_CAPS. Utiliser award() directement pour tout ce qui ne doit pas être plafonné
+// (publication de recette, défis, abonnés...).
+function awardCapped(userId, amount, reason) {
+  const cap = DAILY_CAPS[reason];
+  if (cap) {
+    const already = dailyEarned(userId, reason);
+    if (already >= cap) return;
+    amount = Math.min(amount, cap - already);
+  }
+  award(userId, amount, reason);
 }
 
 // Badges calculés dynamiquement à partir de l'activité
@@ -70,4 +106,4 @@ function badgesFor(userId) {
   return defs.map((d) => ({ ...d, unlocked: d.ok }));
 }
 
-module.exports = { POINTS, LEVELS, levelFor, award, badgesFor };
+module.exports = { POINTS, LEVELS, REASONS, levelFor, award, awardCapped, badgesFor };

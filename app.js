@@ -9,10 +9,20 @@ const App = {
 /* ---------- API helper ---------- */
 // La session repose uniquement sur le cookie httpOnly posé par le serveur (pas de jeton
 // en localStorage : ça évite qu'un script malveillant puisse le lire et voler la session).
+function readCookie(name) {
+  const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
+  return m ? decodeURIComponent(m[1]) : '';
+}
 async function api(path, opts = {}) {
   const res = await fetch('/api' + path, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      // Jeton anti-CSRF : posé en cookie (non httpOnly) par le serveur dès la première visite,
+      // renvoyé ici dans un header — un site tiers ne peut pas lire ce cookie pour le falsifier.
+      'X-CSRF-Token': readCookie('csrf_token'),
+      ...(opts.headers || {}),
+    },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -48,6 +58,30 @@ function showModal(html) {
   m.innerHTML = `<div class="modal">${html}</div>`;
   m.hidden = false;
   m.onclick = (e) => { if (e.target === m) closeModal(); };
+}
+
+const REPORT_REASONS = ['Contenu inapproprié', 'Spam ou publicité', 'Harcèlement', 'Informations trompeuses', 'Autre'];
+
+// Modale de signalement générique — utilisée pour une recette, un commentaire ou un profil
+function openReportModal(targetType, targetId) {
+  showModal(`<h3 class="serif">Signaler</h3>
+    <form id="reportForm" style="text-align:left;margin-top:12px">
+      <div class="field"><label>Motif</label>
+        <select name="reason">${REPORT_REASONS.map((r) => `<option>${esc(r)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Précise si besoin</label><textarea name="detail" placeholder="Optionnel…"></textarea></div>
+      <button class="btn" type="submit">Envoyer le signalement</button>
+    </form>`);
+  document.getElementById('reportForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const reason = f.detail ? `${f.reason} — ${f.detail}` : f.reason;
+    try {
+      await api('/reports', { method: 'POST', body: { target_type: targetType, target_id: Number(targetId), reason } });
+      closeModal();
+      toast('Signalement envoyé, merci.', true);
+    } catch (err) { toast(err.message); }
+  };
 }
 
 const CATEGORIES = ['Tout', 'Entrée', 'Plat', 'Dessert', 'Petit-déj', 'Végétarien', 'Healthy', 'Boisson', 'Autre'];
@@ -359,6 +393,7 @@ async function go(view, arg) {
     challenges: viewChallenges, rewards: viewRewards, profile: viewProfile,
     recipe: viewRecipe, user: viewUser, leaderboard: viewLeaderboard,
     notifications: viewNotifications, bookmarks: viewBookmarks,
+    moderation: viewModeration, legal: viewLegal,
   };
   await (R[view] || viewFeed)(arg);
 }
@@ -381,7 +416,7 @@ function recipeCard(r) {
       <span class="cat-tag">${esc(r.category)}</span>
     </div>
     <div class="recipe-cover ${r.photo?'has-photo':''}" data-open="${r.id}" style="${coverStyle(r.category)}">
-      ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.recipe-cover').classList.remove('has-photo');this.remove()">` : glyph(r.image)}
+      ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy">` : glyph(r.image)}
     </div>
     <div class="recipe-actions">
       <button class="act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${icon('heart',{filled:r.liked})}</span></button>
@@ -402,7 +437,7 @@ function swipeSlide(r) {
   return `
   <section class="swipe-slide" data-recipe="${r.id}">
     <div class="swipe-media ${r.photo?'has-photo':''}" data-open="${r.id}" style="${coverStyle(r.category)}">
-      ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy" onerror="this.closest('.swipe-media').classList.remove('has-photo');this.remove()">` : `<div class="swipe-emoji">${glyph(r.image)}</div>`}
+      ${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" loading="lazy">` : `<div class="swipe-emoji">${glyph(r.image)}</div>`}
     </div>
     <div class="swipe-rail">
       <button class="act rail-act like ${r.liked?'liked':''}" data-like="${r.id}"><span class="ic">${icon('heart',{filled:r.liked})}</span><span class="cnt">${r.likes}</span></button>
@@ -430,7 +465,20 @@ function skeletonSwipe(n = 2) {
   return s;
 }
 
+// Repli quand une photo de recette échoue à charger : révèle l'illustration de secours
+// (émoji/icône) à la place. En JS plutôt qu'en attribut onerror="" inline, pour rester
+// compatible avec une CSP script-src stricte (pas de script inline).
+function wirePhotoFallback(root) {
+  root.querySelectorAll('img.cover-img').forEach((img) => {
+    img.onerror = () => {
+      img.closest('.recipe-cover, .swipe-media, .detail-cover')?.classList.remove('has-photo');
+      img.remove();
+    };
+  });
+}
+
 function wireRecipeCards(root) {
+  wirePhotoFallback(root);
   root.querySelectorAll('[data-open]').forEach((e) => e.onclick = (ev) => { ev.stopPropagation(); go('recipe', e.dataset.open); });
   root.querySelectorAll('[data-user]').forEach((e) => e.onclick = (ev) => { ev.stopPropagation(); go('user', e.dataset.user); });
   root.querySelectorAll('[data-like]').forEach((e) => e.onclick = async (ev) => {
@@ -732,7 +780,7 @@ async function viewRecipe(id) {
     shell(`
       <button class="back-btn" id="back">← Retour</button>
       <div class="card" style="margin-bottom:16px">
-        <div class="detail-cover ${r.photo?'has-photo':''}" style="${coverStyle(r.category)}">${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}" onerror="this.closest('.detail-cover').classList.remove('has-photo');this.remove()">` : glyph(r.image)}</div>
+        <div class="detail-cover ${r.photo?'has-photo':''}" style="${coverStyle(r.category)}">${r.photo ? `<img class="cover-img" src="${esc(r.photo)}" alt="${esc(r.title)}">` : glyph(r.image)}</div>
         <div style="padding:16px">
           <div class="recipe-head" style="padding:0 0 12px">
             <div class="mini-avatar" data-user="${r.author.id}">${avatarGlyph(r.author.avatar, r.author.avatar_color)}</div>
@@ -749,6 +797,7 @@ async function viewRecipe(id) {
           <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
             <button class="btn ${r.liked?'gold':''} small" id="likeBtn"><span class="ic">${icon('heart',{filled:r.liked})}</span> ${r.liked?'Aimé':'J\'aime'} · ${r.likes}</button>
             <button class="btn ghost small" id="bmBtn">${r.bookmarked?'Enregistré':'Enregistrer'}</button>
+            ${r.is_mine?'':'<button class="btn ghost small" id="reportBtn" style="border-color:var(--ink-soft);color:var(--ink-soft)">Signaler</button>'}
           </div>
           ${r.is_mine?`<div style="display:flex;gap:10px;margin-top:10px">
             <button class="btn ghost small" id="editBtn">Modifier</button>
@@ -770,6 +819,8 @@ async function viewRecipe(id) {
         </div>
       </div>`);
 
+    wirePhotoFallback(App.el);
+    wireCommentReports(App.el);
     document.getElementById('back').onclick = () => go('feed');
     App.el.querySelectorAll('[data-user]').forEach((e) => e.onclick = () => go('user', e.dataset.user));
 
@@ -787,6 +838,9 @@ async function viewRecipe(id) {
       document.getElementById('bmBtn').innerHTML = d.bookmarked ? 'Enregistré' : 'Enregistrer';
       toast(d.bookmarked ? 'Ajouté à ton carnet' : 'Retiré du carnet');
     };
+
+    const reportBtn = document.getElementById('reportBtn');
+    if (reportBtn) reportBtn.onclick = () => openReportModal('recipe', id);
 
     if (r.is_mine) {
       document.getElementById('editBtn').onclick = () => viewCreate(r);
@@ -810,7 +864,9 @@ async function viewRecipe(id) {
       if (!body) return;
       try {
         const d = await api(`/recipes/${id}/comments`, { method: 'POST', body: { body } });
-        document.getElementById('commentList').innerHTML = d.comments.map(commentHtml).join('');
+        const commentList = document.getElementById('commentList');
+        commentList.innerHTML = d.comments.map(commentHtml).join('');
+        wireCommentReports(commentList);
         e.target.reset();
         await refreshPoints();
       } catch (err) { toast(err.message); }
@@ -821,7 +877,13 @@ async function viewRecipe(id) {
 function commentHtml(c) {
   return `<div class="comment"><div class="mini-avatar">${avatarGlyph(c.avatar, c.avatar_color)}</div>
     <div class="cbody"><div class="cname">${esc(c.username)}</div>
-    <div class="ctext">${esc(c.body)}</div></div></div>`;
+    <div class="ctext">${esc(c.body)}</div>
+    <button type="button" class="report-link" data-report-comment="${c.id}">Signaler</button></div></div>`;
+}
+
+function wireCommentReports(root) {
+  root.querySelectorAll('[data-report-comment]').forEach((b) =>
+    b.onclick = () => openReportModal('comment', b.dataset.reportComment));
 }
 
 /* ============================================================
@@ -897,7 +959,8 @@ async function viewRewards() {
         showModal(`<div class="mic">${icon('gift')}</div><h3 class="serif">Récompense débloquée</h3>
           <p class="muted">Voici ton code à conserver :</p>
           <div class="code">${d.code}</div>
-          <button class="btn" onclick="document.getElementById('modal').hidden=true">Fermer</button>`);
+          <button class="btn" id="closeModalBtn">Fermer</button>`);
+        document.getElementById('closeModalBtn').onclick = closeModal;
         viewRewards();
       } catch (err) { toast(err.message); }
     });
@@ -922,8 +985,8 @@ async function viewUser(id) {
   if (Number(id) === App.state.user.id) return go('profile');
   App.state.view = '';
   try {
-    const { user, badges, recipes, isFollowing } = await api('/users/' + id);
-    renderProfile(user, badges, { recipes, isFollowing }, false);
+    const { user, badges, recipes, isFollowing, isBlocked } = await api('/users/' + id);
+    renderProfile(user, badges, { recipes, isFollowing, isBlocked }, false);
   } catch (err) { toast(err.message); }
 }
 
@@ -944,8 +1007,13 @@ function renderProfile(user, badges, extra, isSelf) {
       </div>
       ${isSelf
         ? ''
-        : `<button class="btn ${extra.isFollowing?'ghost':''} small" id="followBtn" style="max-width:220px;margin:0 auto">
-             ${extra.isFollowing?'✓ Abonné':'+ Suivre ce chef'}</button>`}
+        : `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:320px;margin:0 auto">
+             <button class="btn ${extra.isFollowing?'ghost':''} small" id="followBtn">
+               ${extra.isFollowing?'✓ Abonné':'+ Suivre ce chef'}</button>
+             <button class="btn ghost small" id="blockBtn" style="border-color:var(--ink-soft);color:var(--ink-soft)">
+               ${extra.isBlocked?'Débloquer':'Bloquer'}</button>
+             <button class="btn ghost small" id="reportUserBtn" style="border-color:var(--ink-soft);color:var(--ink-soft)">Signaler</button>
+           </div>`}
     </div>
 
     <div class="level-card">
@@ -970,6 +1038,8 @@ function renderProfile(user, badges, extra, isSelf) {
         <button class="btn ghost small" data-go="bookmarks">Mon carnet de recettes</button>
         <button class="btn ghost small" id="histBtn">Mon historique de points</button>
         <button class="btn ghost small" id="themeBtn">Basculer en mode sombre</button>
+        ${user.is_admin ? `<button class="btn ghost small" id="modBtn" style="border-color:var(--terracotta);color:var(--terracotta)">${icon('crown')} Modération</button>` : ''}
+        <button class="btn ghost small" id="privacyBtn">Confidentialité de mon compte</button>
         <button class="btn ghost small" id="logout2" style="border-color:var(--ink-soft);color:var(--ink-soft)">Se déconnecter</button>
       </div>`:''}
 
@@ -986,6 +1056,9 @@ function renderProfile(user, badges, extra, isSelf) {
     const tb = document.getElementById('themeBtn');
     tb.textContent = document.documentElement.dataset.theme === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre';
     tb.onclick = toggleTheme;
+    document.getElementById('privacyBtn').onclick = openPrivacyModal;
+    const modBtn = document.getElementById('modBtn');
+    if (modBtn) modBtn.onclick = () => go('moderation');
     document.getElementById('avatarBtn').onclick = () => {
       const unlockedBadges = new Set(badges.filter((b) => b.unlocked).map((b) => b.key));
       const isLocked = (k) => AVATAR_UNLOCKS[k] && !unlockedBadges.has(AVATAR_UNLOCKS[k]);
@@ -1035,6 +1108,14 @@ function renderProfile(user, badges, extra, isSelf) {
       b.textContent = d.following ? '✓ Abonné' : '+ Suivre ce chef';
       toast(d.following ? 'Tu suis maintenant ' + user.username : 'Désabonné');
     };
+    document.getElementById('blockBtn').onclick = async () => {
+      try {
+        const d = await api(`/users/${user.id}/block`, { method: 'POST' });
+        toast(d.blocked ? `${user.username} bloqué·e` : `${user.username} débloqué·e`, true);
+        go('user', user.id);
+      } catch (err) { toast(err.message); }
+    };
+    document.getElementById('reportUserBtn').onclick = () => openReportModal('user', user.id);
   }
 
   const rr = document.getElementById('userRecipes');
@@ -1045,6 +1126,130 @@ function renderProfile(user, badges, extra, isSelf) {
   };
   if (extra && extra.recipes) fill(extra.recipes);
   else api(`/recipes?author=${user.id}`).then((d) => fill(d.recipes)).catch(() => fill([]));
+}
+
+/* ============================================================
+   CONFIDENTIALITÉ DU COMPTE (export / suppression)
+   ============================================================ */
+function openPrivacyModal() {
+  showModal(`<h3 class="serif">Confidentialité de mon compte</h3>
+    <div style="display:grid;gap:10px;margin-top:16px;text-align:left">
+      <button class="btn ghost small" id="exportBtn">${icon('scroll')} Exporter mes données</button>
+      <button class="btn ghost small" id="deleteAccountBtn" style="border-color:var(--terracotta);color:var(--terracotta)">${icon('trash')} Supprimer mon compte</button>
+      <p class="muted" style="font-size:.8rem">Voir aussi nos <a href="#" data-legal="privacy" style="text-decoration:underline">règles de confidentialité</a>.</p>
+    </div>`);
+  document.getElementById('exportBtn').onclick = async () => {
+    try {
+      const data = await api('/me/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cuistot-mes-donnees.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) { toast(err.message); }
+  };
+  document.getElementById('deleteAccountBtn').onclick = () => {
+    showModal(`<div class="mic">${icon('trash')}</div><h3 class="serif">Supprimer définitivement ton compte ?</h3>
+      <p class="muted">Toutes tes recettes, tes commentaires et ton historique seront supprimés. Cette action est irréversible.</p>
+      <form id="deleteAccountForm" style="text-align:left;margin-top:14px">
+        <div class="field"><label>Confirme avec ton mot de passe</label><input name="password" type="password" required></div>
+        <button class="btn" type="submit" style="background:var(--terracotta)">Supprimer mon compte</button>
+      </form>`);
+    document.getElementById('deleteAccountForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const password = e.target.password.value;
+      try {
+        await api('/me', { method: 'DELETE', body: { password } });
+        closeModal();
+        App.state = { user: null, badges: [], view: 'feed' };
+        toast('Compte supprimé.', true);
+        renderAuth('login');
+      } catch (err) { toast(err.message); }
+    };
+  };
+  document.querySelectorAll('[data-legal]').forEach((a) => a.onclick = (e) => { e.preventDefault(); closeModal(); go('legal', a.dataset.legal); });
+}
+
+/* ============================================================
+   MODÉRATION (admin)
+   ============================================================ */
+async function viewModeration() {
+  App.state.view = '';
+  shell(`
+    <button class="back-btn" id="back">← Retour</button>
+    <div class="section-title serif">Modération</div>
+    <p class="muted" style="margin-bottom:12px">Signalements en attente.</p>
+    <div id="reportList">${skeletonCards(2)}</div>`);
+  document.getElementById('back').onclick = () => go('profile');
+  try {
+    const { reports } = await api('/admin/reports');
+    const list = document.getElementById('reportList');
+    list.innerHTML = reports.length ? reports.map((r) => `
+      <article class="card challenge" data-report="${r.id}">
+        <div class="ch-top">
+          <div style="flex:1">
+            <h4>${esc(r.target_type)} #${r.target_id} — signalé par ${esc(r.reporter)}</h4>
+            <div class="ch-desc">${esc(r.reason)}</div>
+            <div class="muted" style="font-size:.82rem;margin-top:6px">« ${esc(String(r.preview).slice(0,140))} »</div>
+          </div>
+        </div>
+        <div class="ch-foot" style="gap:8px;flex-wrap:wrap">
+          <button class="btn tiny" data-action="dismiss" data-id="${r.id}">Rejeter</button>
+          ${r.target_type !== 'user' ? `<button class="btn tiny gold" data-action="hide" data-id="${r.id}">Masquer le contenu</button>` : ''}
+          <button class="btn tiny" data-action="suspend_user" data-id="${r.id}" style="background:var(--terracotta);color:#fff">Suspendre le compte</button>
+        </div>
+      </article>`).join('')
+      : `<div class="empty"><div class="big">${icon('check')}</div><p>Aucun signalement en attente.</p></div>`;
+    list.querySelectorAll('[data-action]').forEach((b) => b.onclick = async () => {
+      try {
+        await api(`/admin/reports/${b.dataset.id}/resolve`, { method: 'POST', body: { action: b.dataset.action } });
+        toast('Signalement traité', true);
+        viewModeration();
+      } catch (err) { toast(err.message); }
+    });
+  } catch (err) { toast(err.message); go('profile'); }
+}
+
+/* ============================================================
+   PAGES LÉGALES
+   ============================================================ */
+const LEGAL_PAGES = {
+  privacy: {
+    title: 'Confidentialité',
+    body: `<p class="muted" style="text-align:left">Cuistot collecte les données nécessaires au fonctionnement du service : ton profil (pseudo, email, avatar), tes recettes et interactions (likes, commentaires, abonnements), et un historique de points. Ces données sont utilisées uniquement pour faire fonctionner l'application (afficher le fil, calculer tes points, t'envoyer un email de réinitialisation de mot de passe) — elles ne sont ni vendues ni partagées avec des tiers à des fins publicitaires.</p>
+      <p class="muted" style="text-align:left;margin-top:10px">Tu peux à tout moment exporter l'intégralité de tes données ou supprimer ton compte depuis ton profil (section « Confidentialité de mon compte »). La suppression est définitive et retire tes recettes, commentaires et abonnements.</p>
+      <p class="muted" style="text-align:left;margin-top:10px">Les mots de passe sont hashés (jamais stockés en clair). Les sessions reposent sur un cookie sécurisé.</p>`,
+  },
+  terms: {
+    title: 'Conditions d\'utilisation',
+    body: `<p class="muted" style="text-align:left">En utilisant Cuistot, tu acceptes de publier uniquement du contenu dont tu détiens les droits, de ne pas usurper l'identité d'autrui, et de respecter les autres membres de la communauté. Cuistot se réserve le droit de masquer un contenu ou de suspendre un compte qui ne respecterait pas ces règles ou les règles communautaires ci-dessous.</p>
+      <p class="muted" style="text-align:left;margin-top:10px">Le service est fourni "en l'état", sans garantie de disponibilité continue. Les points, niveaux et récompenses n'ont aucune valeur monétaire réelle sauf mention contraire explicite lors d'un échange.</p>`,
+  },
+  community: {
+    title: 'Règles communautaires',
+    body: `<p class="muted" style="text-align:left">Cuistot est un espace bienveillant autour de la cuisine. Sont interdits : le harcèlement, les propos haineux ou discriminatoires, le spam, la publicité non sollicitée, et tout contenu trompeur (notamment sur des allergènes ou informations nutritionnelles).</p>
+      <p class="muted" style="text-align:left;margin-top:10px">Tu peux signaler une recette, un commentaire ou un profil directement depuis l'application. Les signalements sont examinés par l'équipe de modération, qui peut masquer un contenu ou suspendre un compte.</p>`,
+  },
+  cookies: {
+    title: 'Cookies',
+    body: `<p class="muted" style="text-align:left">Cuistot utilise deux cookies techniques, strictement nécessaires au fonctionnement du service : un cookie de session (pour rester connecté) et un cookie de sécurité anti-CSRF. Aucun cookie de suivi publicitaire ou analytique n'est utilisé.</p>`,
+  },
+};
+
+async function viewLegal(page) {
+  App.state.view = '';
+  const p = LEGAL_PAGES[page] || LEGAL_PAGES.privacy;
+  shell(`
+    <button class="back-btn" id="back">← Retour</button>
+    <div class="section-title serif">${esc(p.title)}</div>
+    <div class="chips" style="margin-bottom:14px">
+      ${Object.entries(LEGAL_PAGES).map(([k, v]) => `<button class="chip ${k===page?'active':''}" data-legal-nav="${k}">${esc(v.title)}</button>`).join('')}
+    </div>
+    <div class="card" style="padding:18px">${p.body}</div>
+    <p class="muted" style="font-size:.78rem;margin-top:14px">Contenu de départ, à faire valider par un juriste avant un lancement public — ce n'est pas un conseil juridique.</p>`);
+  document.getElementById('back').onclick = () => go('profile');
+  document.querySelectorAll('[data-legal-nav]').forEach((b) => b.onclick = () => go('legal', b.dataset.legalNav));
 }
 
 async function showHistory() {
@@ -1058,7 +1263,8 @@ async function showHistory() {
             <b style="color:${e.amount>=0?'var(--olive)':'var(--terracotta)'}">${e.amount>=0?'+':''}${e.amount}</b>
           </div>`).join('') : '<p class="muted">Rien pour l\'instant.</p>'}
       </div>
-      <button class="btn" onclick="document.getElementById('modal').hidden=true">Fermer</button>`);
+      <button class="btn" id="closeModalBtn">Fermer</button>`);
+    document.getElementById('closeModalBtn').onclick = closeModal;
   } catch (err) { toast(err.message); }
 }
 

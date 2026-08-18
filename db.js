@@ -18,6 +18,9 @@ db.exec(`
     avatar        TEXT DEFAULT 'pan',
     avatar_color  TEXT DEFAULT 'cream',
     points        INTEGER DEFAULT 0,
+    is_premium         INTEGER DEFAULT 0,
+    stripe_customer_id     TEXT,
+    stripe_subscription_id TEXT,
     created_at    TEXT DEFAULT (datetime('now'))
   );
 
@@ -134,12 +137,44 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- Signalements (recette / commentaire / profil)
+  CREATE TABLE IF NOT EXISTS reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_type TEXT NOT NULL,   -- 'recipe' | 'comment' | 'user'
+    target_id   INTEGER NOT NULL,
+    reason      TEXT NOT NULL,
+    status      TEXT DEFAULT 'open',  -- 'open' | 'resolved' | 'dismissed'
+    created_at  TEXT DEFAULT (datetime('now'))
+  );
+
+  -- Blocages entre utilisateurs
+  CREATE TABLE IF NOT EXISTS blocks (
+    blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (blocker_id, blocked_id)
+  );
+
+  -- Journal des actions de modération (accountabilité admin)
+  CREATE TABLE IF NOT EXISTS admin_actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action      TEXT NOT NULL,
+    target_type TEXT,
+    target_id   INTEGER,
+    note        TEXT DEFAULT '',
+    created_at  TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_pwreset_user ON password_resets(user_id);
   CREATE INDEX IF NOT EXISTS idx_recipes_author ON recipes(author_id);
   CREATE INDEX IF NOT EXISTS idx_recipes_category ON recipes(category);
   CREATE INDEX IF NOT EXISTS idx_comments_recipe ON comments(recipe_id);
   CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
   CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
+  CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+  CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON blocks(blocker_id);
 `);
 
 // Migration douce : ajoute la colonne photo aux bases déjà existantes
@@ -157,5 +192,33 @@ try {
     db.exec("ALTER TABLE users ADD COLUMN avatar_color TEXT DEFAULT 'cream'");
   }
 } catch {}
+
+// Migration douce : statut premium / identifiants Stripe (fonctionnalité pas encore branchée
+// côté routes — colonnes ajoutées par anticipation, cf. discussion avatars premium)
+try {
+  const cols = db.prepare("PRAGMA table_info(users)").all();
+  const names = cols.map((c) => c.name);
+  if (!names.includes('is_premium')) db.exec('ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0');
+  if (!names.includes('stripe_customer_id')) db.exec('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT');
+  if (!names.includes('stripe_subscription_id')) db.exec('ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT');
+} catch {}
+
+// Migration douce : modération (admin, suspension, contenu masqué) et série de connexion
+try {
+  const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!userCols.includes('is_admin')) db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0');
+  if (!userCols.includes('is_suspended')) db.exec('ALTER TABLE users ADD COLUMN is_suspended INTEGER DEFAULT 0');
+  if (!userCols.includes('last_login_award_date')) db.exec('ALTER TABLE users ADD COLUMN last_login_award_date TEXT');
+
+  const recipeCols = db.prepare("PRAGMA table_info(recipes)").all().map((c) => c.name);
+  if (!recipeCols.includes('is_hidden')) db.exec('ALTER TABLE recipes ADD COLUMN is_hidden INTEGER DEFAULT 0');
+
+  const commentCols = db.prepare("PRAGMA table_info(comments)").all().map((c) => c.name);
+  if (!commentCols.includes('is_hidden')) db.exec('ALTER TABLE comments ADD COLUMN is_hidden INTEGER DEFAULT 0');
+} catch {}
+
+// Ces migrations "douces" au démarrage sont un raccourci propre à SQLite/MVP. Le Lot 1 du
+// brief (migration PostgreSQL) les remplacera par un vrai système de migrations versionnées
+// et idempotentes (dossier db/migrations/, exécuté explicitement, pas au chargement du module).
 
 module.exports = db;

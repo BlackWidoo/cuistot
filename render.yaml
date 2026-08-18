@@ -1,6 +1,12 @@
 # Configuration Render — déploiement automatique
 # (Render lit ce fichier tout seul lors d'un « Blueprint », mais tu peux aussi
 #  créer le service à la main : Build = npm install, Start = npm start)
+#
+# buildCommand utilise `npm install` plutôt que `npm ci` : il n'y a pas de Node.js
+# en local pour générer un package-lock.json, donc pas de lockfile commité pour
+# l'instant. `npm install` fonctionne très bien sans lockfile (juste un peu moins
+# reproductible d'un build à l'autre). Si un jour un package-lock.json est généré
+# et commité, repasser sur `npm ci` est recommandé (build plus rapide et strict).
 services:
   - type: web
     name: cuistot
@@ -9,5 +15,9 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: JWT_SECRET
         generateValue: true   # Render génère un secret sûr automatiquement
+      - key: HEALTH_CHECK_KEY
+        generateValue: true   # protège /health/ready (voir .env.example)
