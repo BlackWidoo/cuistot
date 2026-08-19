@@ -5,7 +5,7 @@
 // sinon la coquille mise en cache (avec ses en-têtes d'origine) continue d'être servie sans
 // jamais repasser par le réseau, et le changement reste invisible pour les clients existants
 // (vécu deux fois : v20 pour blob:, oublié pour upload.wikimedia.org — d'où v21).
-const CACHE = 'cuistot-v21';
+const CACHE = 'cuistot-v22';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -32,6 +32,13 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  // Ne jamais intercepter les requêtes vers un autre domaine (polices Google Fonts, photos
+  // Wikimedia/TheMealDB...) : un fetch() fait depuis le service worker est soumis à la
+  // directive CSP connect-src (qui n'autorise que 'self'), alors qu'une requête laissée au
+  // navigateur est soumise à la directive du bon type de ressource (style-src, img-src...),
+  // déjà correctement configurée. Intercepter ces requêtes les faisait donc échouer
+  // silencieusement (polices et photos externes jamais affichées).
+  if (url.origin !== self.location.origin) return;
   // On ne met jamais en cache l'API : toujours des données fraîches
   if (url.pathname.startsWith('/api/')) return;
   if (e.request.method !== 'GET') return;
