@@ -11,7 +11,12 @@ const { apiError } = require('./errors');
 function ensureCsrfCookie(req, res, next) {
   if (!req.cookies.csrf_token) {
     const token = crypto.randomBytes(24).toString('hex');
-    res.cookie('csrf_token', token, { httpOnly: false, sameSite: 'lax', secure: IS_PROD, maxAge: 30 * 864e5 });
+    res.cookie('csrf_token', token, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: IS_PROD,
+      maxAge: 30 * 864e5,
+    });
     req.cookies.csrf_token = token; // dispo tout de suite si cette même requête est aussi vérifiée
   }
   next();
@@ -22,7 +27,12 @@ function csrfProtect(req, res, next) {
   if (SAFE_METHODS.has(req.method)) return next();
   const header = req.headers['x-csrf-token'];
   if (!header || header !== req.cookies.csrf_token) {
-    return apiError(res, 403, 'Requête refusée (jeton de sécurité manquant ou invalide)', 'CSRF_INVALID');
+    return apiError(
+      res,
+      403,
+      'Requête refusée (jeton de sécurité manquant ou invalide)',
+      'CSRF_INVALID'
+    );
   }
   next();
 }

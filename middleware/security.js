@@ -30,7 +30,10 @@ const securityHeaders = helmet({
 // Helmet ne pose pas Permissions-Policy par défaut : l'app n'utilise aucune de ces API,
 // autant le dire explicitement au navigateur.
 function permissionsPolicy(req, res, next) {
-  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()');
+  res.setHeader(
+    'Permissions-Policy',
+    'geolocation=(), camera=(), microphone=(), payment=(), usb=()'
+  );
   next();
 }
 

@@ -9,7 +9,9 @@ const PORT = process.env.PORT || 3000;
 // En production le secret DOIT venir de l'environnement (Render le génère automatiquement,
 // voir render.yaml). On refuse de démarrer plutôt que de tourner avec un secret connu de tous.
 if (IS_PROD && !process.env.JWT_SECRET) {
-  console.error('❌ JWT_SECRET manquant en production. Configure la variable d\'environnement avant de démarrer.');
+  console.error(
+    "❌ JWT_SECRET manquant en production. Configure la variable d'environnement avant de démarrer."
+  );
   process.exit(1);
 }
 const JWT_SECRET = process.env.JWT_SECRET || 'cuistot-dev-secret-change-me';

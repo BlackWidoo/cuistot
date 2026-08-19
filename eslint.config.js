@@ -17,6 +17,7 @@ const nodeGlobals = {
   clearTimeout: 'readonly',
   setInterval: 'readonly',
   clearInterval: 'readonly',
+  fetch: 'readonly', // global Node >= 18, utilisé dans test/*.js (et disponible partout côté serveur)
 };
 
 const browserGlobals = {
@@ -48,6 +49,7 @@ const serviceWorkerGlobals = {
   caches: 'readonly',
   fetch: 'readonly',
   console: 'readonly',
+  URL: 'readonly',
 };
 
 // Règles core ESLint uniquement (aucun plugin/preset externe requis) : on vise les vraies
@@ -71,9 +73,18 @@ module.exports = [
   },
   {
     files: [
-      'server.js', 'db.js', 'gamification.js', 'seed-core.js', 'config.js', 'bootstrap.js',
-      'eslint.config.js', 'test/**/*.js',
-      'middleware/**/*.js', 'services/**/*.js', 'schemas/**/*.js', 'routes/**/*.js',
+      'server.js',
+      'db.js',
+      'gamification.js',
+      'seed-core.js',
+      'config.js',
+      'bootstrap.js',
+      'eslint.config.js',
+      'test/**/*.js',
+      'middleware/**/*.js',
+      'services/**/*.js',
+      'schemas/**/*.js',
+      'routes/**/*.js',
     ],
     languageOptions: {
       ecmaVersion: 2022,

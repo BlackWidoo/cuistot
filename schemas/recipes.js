@@ -2,11 +2,20 @@
 const { z } = require('zod');
 
 // Limites de longueur pour éviter des textes absurdement longs (UI + stockage)
-const MAX_TITLE = 120, MAX_DESC = 2000, MAX_COMMENT = 1000;
+const MAX_TITLE = 120,
+  MAX_DESC = 2000,
+  MAX_COMMENT = 1000;
 
 const recipeSchema = z.object({
-  title: z.string().trim().min(1, 'Titre requis').max(MAX_TITLE, `Titre trop long (max ${MAX_TITLE} caractères)`),
-  description: z.string().max(MAX_DESC, `Description trop longue (max ${MAX_DESC} caractères)`).optional(),
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Titre requis')
+    .max(MAX_TITLE, `Titre trop long (max ${MAX_TITLE} caractères)`),
+  description: z
+    .string()
+    .max(MAX_DESC, `Description trop longue (max ${MAX_DESC} caractères)`)
+    .optional(),
   category: z.string().max(40).optional(),
   difficulty: z.string().max(40).optional(),
   // .catch() plutôt que .optional() : un champ vidé par erreur (input number effacé) retombe
@@ -18,14 +27,19 @@ const recipeSchema = z.object({
   // Un ingrédient est soit une chaîne libre (recettes créées avant le Lot 8, tolérance en
   // écriture aussi au cas où), soit structuré {qty, unit, label} pour permettre le recalcul
   // des quantités quand on ajuste le nombre de portions.
-  ingredients: z.array(z.union([
-    z.string().max(200),
-    z.object({
-      qty: z.coerce.number().min(0).max(100000).nullable().optional(),
-      unit: z.string().max(20).optional(),
-      label: z.string().trim().min(1).max(200),
-    }),
-  ])).max(60).optional(),
+  ingredients: z
+    .array(
+      z.union([
+        z.string().max(200),
+        z.object({
+          qty: z.coerce.number().min(0).max(100000).nullable().optional(),
+          unit: z.string().max(20).optional(),
+          label: z.string().trim().min(1).max(200),
+        }),
+      ])
+    )
+    .max(60)
+    .optional(),
   steps: z.array(z.string().max(1000)).max(60).optional(),
   tags: z.array(z.string().max(40)).max(20).optional(),
   // Macros/coût par portion — tous optionnels
@@ -40,7 +54,11 @@ const recipeSchema = z.object({
   status: z.enum(['draft', 'published']).optional(),
 });
 const commentSchema = z.object({
-  body: z.string().trim().min(1, 'Commentaire vide').max(MAX_COMMENT, `Commentaire trop long (max ${MAX_COMMENT} caractères)`),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Commentaire vide')
+    .max(MAX_COMMENT, `Commentaire trop long (max ${MAX_COMMENT} caractères)`),
 });
 
 module.exports = { recipeSchema, commentSchema, MAX_TITLE, MAX_DESC, MAX_COMMENT };

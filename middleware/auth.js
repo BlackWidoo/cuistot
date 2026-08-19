@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { JWT_SECRET, COOKIE_OPTS } = require('../config');
-const { apiError } = require('./errors');
+const { apiError, asyncHandler } = require('./errors');
 
 function sign(user) {
   return jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
@@ -27,11 +27,12 @@ function auth(required = true) {
   };
 }
 
-// À placer après auth() sur une route : exige que l'utilisateur connecté soit admin.
-function requireAdmin(req, res, next) {
-  const u = db.prepare('SELECT is_admin FROM users WHERE id=?').get(req.user.id);
+// À placer après auth() sur une route : exige que l'utilisateur connecté soit admin. Enveloppé
+// dans asyncHandler ici (plutôt qu'à chaque route qui l'utilise) pour ne pas pouvoir l'oublier.
+const requireAdmin = asyncHandler(async (req, res, next) => {
+  const u = await db.get('SELECT is_admin FROM users WHERE id=$1', [req.user.id]);
   if (!u?.is_admin) return apiError(res, 403, 'Réservé aux administrateurs', 'FORBIDDEN');
   next();
-}
+});
 
 module.exports = { sign, auth, requireAdmin, COOKIE_OPTS };

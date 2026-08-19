@@ -26,9 +26,21 @@ function validate(schema) {
 // Valide un :id d'URL (entier positif) avant de toucher la base.
 function idParam(req, res, next) {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return apiError(res, 400, 'Identifiant invalide', 'VALIDATION_ERROR');
+  if (!Number.isInteger(id) || id <= 0)
+    return apiError(res, 400, 'Identifiant invalide', 'VALIDATION_ERROR');
   req.id = id;
   next();
 }
 
-module.exports = { apiError, validate, idParam };
+// Les handlers de routes sont désormais async (accès base PostgreSQL) : Express 4 ne rattrape
+// pas nativement une promesse rejetée dans un handler, ce qui ferait planter le process. Ce
+// wrapper convertit tout rejet en erreur 500 propre au lieu d'un crash.
+function asyncHandler(fn) {
+  return (req, res, next) =>
+    Promise.resolve(fn(req, res, next)).catch((e) => {
+      console.error(e);
+      apiError(res, 500, 'Erreur serveur', 'SERVER_ERROR');
+    });
+}
+
+module.exports = { apiError, validate, idParam, asyncHandler };

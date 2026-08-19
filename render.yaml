@@ -2,22 +2,35 @@
 # (Render lit ce fichier tout seul lors d'un « Blueprint », mais tu peux aussi
 #  créer le service à la main : Build = npm install, Start = npm start)
 #
-# buildCommand utilise `npm install` plutôt que `npm ci` : il n'y a pas de Node.js
-# en local pour générer un package-lock.json, donc pas de lockfile commité pour
-# l'instant. `npm install` fonctionne très bien sans lockfile (juste un peu moins
-# reproductible d'un build à l'autre). Si un jour un package-lock.json est généré
-# et commité, repasser sur `npm ci` est recommandé (build plus rapide et strict).
+# buildCommand utilise `npm ci` (pas `npm install`) : package-lock.json est maintenant commité,
+# donc un build strict et reproductible à partir de ce lockfile est possible.
+#
+# databases: provisionne une base PostgreSQL et injecte automatiquement son URL de
+# connexion dans DATABASE_URL (via `fromDatabase` ci-dessous) — rien à copier-coller à la
+# main. Attention : le plan gratuit de Render Postgres expire au bout de 30 jours (la base
+# est ensuite supprimée). Pour une base gratuite qui ne périme pas, remplace ce bloc par une
+# base créée chez Neon ou Supabase, et colle son URL directement dans l'onglet Environment du
+# service au lieu d'utiliser `fromDatabase`.
+databases:
+  - name: cuistot-db
+    plan: free
+    postgresMajorVersion: 16
+
 services:
   - type: web
     name: cuistot
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
-        generateValue: true   # Render génère un secret sûr automatiquement
+        generateValue: true # Render génère un secret sûr automatiquement
       - key: HEALTH_CHECK_KEY
-        generateValue: true   # protège /health/ready (voir .env.example)
+        generateValue: true # protège /health/ready (voir .env.example)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cuistot-db
+          property: connectionString
