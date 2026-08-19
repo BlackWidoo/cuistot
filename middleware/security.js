@@ -16,7 +16,11 @@ const securityHeaders = helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       // themealdb.com : photos des recettes de démo (seed-core.js). À retirer si le Lot 2
       // (upload médias externe) remplace ces URLs de démonstration.
-      imgSrc: ["'self'", 'data:', 'https://www.themealdb.com'],
+      // blob: : nécessaire à l'aperçu/compression client d'une photo avant envoi (resizeImage
+      // dans app.js charge le fichier choisi via URL.createObjectURL avant de le redimensionner
+      // sur un <canvas>) — sans ça, le navigateur bloque le chargement et l'ajout de photo
+      // échoue silencieusement avec « Impossible de lire cette image ».
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://www.themealdb.com'],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
