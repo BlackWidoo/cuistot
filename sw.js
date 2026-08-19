@@ -1,6 +1,11 @@
 // Service worker minimal — met en cache la coquille de l'app pour un lancement rapide
 // et un accès hors-ligne basique. Les appels API passent toujours par le réseau.
-const CACHE = 'cuistot-v20';
+// IMPORTANT : incrémenter CACHE à CHAQUE déploiement qui change les en-têtes de réponse
+// (CSP dans middleware/security.js notamment), même si sw.js/SHELL lui-même ne change pas —
+// sinon la coquille mise en cache (avec ses en-têtes d'origine) continue d'être servie sans
+// jamais repasser par le réseau, et le changement reste invisible pour les clients existants
+// (vécu deux fois : v20 pour blob:, oublié pour upload.wikimedia.org — d'où v21).
+const CACHE = 'cuistot-v21';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
