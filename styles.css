@@ -567,7 +567,7 @@ img {
   width: calc(100% + 32px);
   height: calc(100dvh - 64px - 82px);
   overflow: hidden;
-  background: #111;
+  background: #2b211c;
   border-radius: 0;
 }
 .swipe-tabs {
@@ -595,7 +595,7 @@ img {
 }
 .stab.active {
   background: rgba(255, 255, 255, 0.95);
-  color: #111;
+  color: #2b211c;
 }
 .swipe-list {
   height: 100%;
@@ -603,7 +603,7 @@ img {
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  background: #111;
+  background: #2b211c;
 }
 .swipe-list::-webkit-scrollbar {
   display: none;
@@ -616,14 +616,14 @@ img {
   display: flex;
   align-items: flex-end;
   overflow: hidden;
-  background: #111;
+  background: #2b211c;
 }
 .swipe-media {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2a2a2a, #181818);
+  background: linear-gradient(135deg, #3d2b21, #241a14);
 }
 .swipe-emoji {
   font-size: 6rem;
