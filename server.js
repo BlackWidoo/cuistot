@@ -7,13 +7,14 @@
 //   schemas/         — schémas de validation Zod
 //   routes/          — un routeur Express par domaine (auth, recipes, social, moderation...)
 //   bootstrap.js     — remplissage initial de la base + promotion admin (une fois au démarrage)
-// Pas de couche "repository" séparée au-dessus de db.js : better-sqlite3 est déjà une API
-// synchrone simple (prepared statements), et une abstraction supplémentaire n'aurait ajouté
-// que du risque de bug (impossible à exécuter/tester ici) sans bénéfice clair.
+// Pas de couche "repository" séparée au-dessus de db.js : c'est déjà une API minimale
+// (get/all/run/transaction) au-dessus de PostgreSQL (pg), et une abstraction supplémentaire
+// n'aurait ajouté que du risque de bug sans bénéfice clair.
 const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { PORT } = require('./config');
+const db = require('./db');
 const runBootstrap = require('./bootstrap');
 const { securityHeaders, permissionsPolicy } = require('./middleware/security');
 const { ensureCsrfCookie, csrfProtect } = require('./middleware/csrf');
@@ -45,8 +46,11 @@ app.use(require('./routes/health'));
 // ---------- SEO : méta-tags par recette, sitemap, robots.txt (Lot 11) ----------
 app.use(require('./routes/seo'));
 
-// Actions à exécuter une fois au démarrage (seed + bootstrap admin)
-runBootstrap();
+// Le schéma PostgreSQL (db.js) et le seed/bootstrap admin (bootstrap.js) sont asynchrones :
+// pas de requête traitée avant que les tables existent et soient peuplées. `app.ready` est
+// exposé pour que les tests attendent ce même signal avant d'ouvrir un port (voir test/api.test.js).
+const ready = db.ready.then(() => runBootstrap());
+app.ready = ready;
 
 // Ne jamais exposer les fichiers du serveur (structure à plat pour un déploiement mobile facile)
 app.use(staticGuard);
@@ -65,10 +69,13 @@ app.use('/api', require('./routes/misc'));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // N'écoute le réseau que si ce fichier est lancé directement (node server.js / npm start).
-// Les tests font `require('../server')` pour récupérer l'app Express sans ouvrir de port fixe.
+// Les tests font `require('../server')` pour récupérer l'app Express sans ouvrir de port fixe
+// (ils attendent `app.ready` eux-mêmes avant d'appeler `.listen()`).
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`\n🍽️  Cuistot tourne sur le port ${PORT}\n`);
+  ready.then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🍽️  Cuistot tourne sur le port ${PORT}\n`);
+    });
   });
 }
 module.exports = app;

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Base PostgreSQL jetable pour les tests (test/*.test.js) — recréée à chaque run, aucune
+    # donnée ne survit d'un job au suivant. Voir test/api.test.js et test/gamification.test.js :
+    # DATABASE_URL par défaut pointe déjà sur ces identifiants pour le dev local aussi.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cuistot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cuistot_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Vérifier le formatage (Prettier)
+        run: npm run format:check
+
+      - name: Vérifier la syntaxe
+        run: npm run check
+
+      - name: Tests
+        run: npm test

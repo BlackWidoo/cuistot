@@ -2,16 +2,18 @@
 // promotion admin. Séparé de server.js pour garder la composition root lisible.
 const db = require('./db');
 
-function runBootstrap() {
+async function runBootstrap() {
   // Auto-remplissage de la base au premier démarrage (utile pour l'hébergement en ligne)
   try {
-    const empty = db.prepare('SELECT COUNT(*) c FROM users').get().c === 0;
-    if (empty) {
+    const row = await db.get('SELECT COUNT(*) c FROM users');
+    if (Number(row.c) === 0) {
       const { seedData } = require('./seed-core');
-      const r = seedData(db);
+      const r = await seedData(db);
       console.log(`🌱 Base initialisée : ${r.users} utilisateurs, ${r.recipes} recettes.`);
     }
-  } catch (e) { console.error('Seed auto ignoré :', e.message); }
+  } catch (e) {
+    console.error('Seed auto ignoré :', e.message);
+  }
 
   // Bootstrap admin : si ADMIN_EMAIL est définie, le compte correspondant devient admin au
   // démarrage (idempotent, sans effet si le compte n'existe pas encore — retentera au prochain
@@ -19,9 +21,13 @@ function runBootstrap() {
   // d'environnement choisie par l'exploitant du service.
   if (process.env.ADMIN_EMAIL) {
     try {
-      const r = db.prepare('UPDATE users SET is_admin=1 WHERE email=?').run(process.env.ADMIN_EMAIL.trim().toLowerCase());
+      const r = await db.run('UPDATE users SET is_admin=1 WHERE email=$1', [
+        process.env.ADMIN_EMAIL.trim().toLowerCase(),
+      ]);
       if (r.changes) console.log(`👑 ${process.env.ADMIN_EMAIL} promu administrateur.`);
-    } catch (e) { console.error('Bootstrap admin ignoré :', e.message); }
+    } catch (e) {
+      console.error('Bootstrap admin ignoré :', e.message);
+    }
   }
 }
 

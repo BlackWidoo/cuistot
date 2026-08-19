@@ -1,20 +1,20 @@
 # Cuistot — le réseau social des gourmands
 
-App Node.js / Express / SQLite (front-end vanilla JS, sans build step). Ce README suit le
+App Node.js / Express / PostgreSQL (front-end vanilla JS, sans build step). Ce README suit le
 brief technique de mise en production, livré lot par lot.
 
 ## Démarrage local
 
 ```bash
 npm install
-cp .env.example .env   # renseigne au moins JWT_SECRET pour du dev sérieux
+cp .env.example .env   # renseigne JWT_SECRET et DATABASE_URL (Postgres local ou distant)
 npm start               # http://localhost:3000
 ```
 
 ## Tests
 
 ```bash
-npm test                # tests d'intégration (node:test), base SQLite en mémoire
+npm test                # tests d'intégration (node:test), base PostgreSQL jetable
 npm run check            # vérif syntaxe (node --check) sur tous les fichiers serveur
 npm run lint             # ESLint (variables non définies, code mort...)
 npm run format:check     # Prettier en mode vérification (rien n'est réécrit)
@@ -27,16 +27,15 @@ npm run verify           # enchaîne check + lint + format:check + test — à l
 Voir [`.env.example`](./.env.example) pour la liste complète et le rôle de chaque variable.
 Résumé de ce qui est **actif aujourd'hui** vs **réservé pour un lot à venir** :
 
-| Variable | Statut |
-|---|---|
-| `NODE_ENV`, `PORT`, `JWT_SECRET` | Actif |
-| `DB_PATH` | Actif (SQLite) |
-| `HEALTH_CHECK_KEY` | Actif (protège `/health/ready`) |
-| `DATABASE_URL` | Réservée — Lot 1 (migration PostgreSQL), pas encore lue par le code |
-| `RESEND_API_KEY`, `EMAIL_*` | Réservées — Lot 3 (email réel). En attendant, le lien de reset de mot de passe est journalisé côté serveur (`console.log`), jamais envoyé par email |
-| `CLOUDINARY_*`, `MEDIA_PROVIDER` | Réservées — Lot 2 (upload photos externe). En attendant, les photos restent en base64 dans SQLite |
-| `SENTRY_DSN` | Réservée — Lot 5 |
-| `REDIS_URL` | Réservée — Lot 4 (rate limiting distribué). En attendant, le rate limiting est en mémoire process (ne tient pas la route avec plusieurs instances) |
+| Variable                         | Statut                                                                                                                                              |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`, `PORT`, `JWT_SECRET` | Actif                                                                                                                                               |
+| `DATABASE_URL`                   | Actif (PostgreSQL) — obligatoire, le serveur refuse de démarrer sans elle                                                                           |
+| `HEALTH_CHECK_KEY`               | Actif (protège `/health/ready`)                                                                                                                     |
+| `RESEND_API_KEY`, `EMAIL_*`      | Réservées — Lot 3 (email réel). En attendant, le lien de reset de mot de passe est journalisé côté serveur (`console.log`), jamais envoyé par email |
+| `CLOUDINARY_*`, `MEDIA_PROVIDER` | Réservées — Lot 2 (upload photos externe). En attendant, les photos restent en base64 dans PostgreSQL                                               |
+| `SENTRY_DSN`                     | Réservée — Lot 5                                                                                                                                    |
+| `REDIS_URL`                      | Réservée — Lot 4 (rate limiting distribué). En attendant, le rate limiting est en mémoire process (ne tient pas la route avec plusieurs instances)  |
 
 **Règle du projet : aucun secret n'est commité.** `.env` est ignoré par git ; seul
 `.env.example` (sans valeurs) est versionné.
@@ -53,18 +52,19 @@ Résumé de ce qui est **actif aujourd'hui** vs **réservé pour un lot à venir
 Deux façons de déployer :
 
 - **Blueprint** (recommandé) : "New +" → "Blueprint", pointe sur ce repo. Render lit
-  `render.yaml` et génère automatiquement `JWT_SECRET` et `HEALTH_CHECK_KEY`.
-- **Manuel** : "New +" → "Web Service". Build = `npm install`, Start = `npm start`, puis
-  ajoute toi-même les variables d'environnement dans l'onglet *Environment* (au minimum
-  `JWT_SECRET`, sinon le serveur refuse de démarrer en production).
+  `render.yaml`, génère automatiquement `JWT_SECRET`/`HEALTH_CHECK_KEY`, provisionne la base
+  PostgreSQL (`databases:` → `cuistot-db`) et branche `DATABASE_URL` dessus tout seul.
+  **Attention** : le plan gratuit de Render Postgres expire au bout de 30 jours (base
+  supprimée ensuite) — passer sur un plan payant ou migrer vers Neon/Supabase avant l'échéance.
+- **Manuel** : "New +" → "Web Service". Build = `npm ci`, Start = `npm start`, puis
+  ajoute toi-même les variables d'environnement dans l'onglet _Environment_ (au minimum
+  `JWT_SECRET` et `DATABASE_URL`, sinon le serveur refuse de démarrer en production).
 
-`buildCommand` utilise `npm install` (pas `npm ci`) car il n'y a pas de `package-lock.json`
-commité pour l'instant (pas de Node.js disponible en local pour le générer). Si ce fichier
-est généré et commité un jour, repasser `render.yaml` sur `npm ci` est recommandé (build plus
-rapide et strictement reproductible).
+`buildCommand` utilise `npm ci` (build strict et reproductible à partir de
+`package-lock.json`, commité depuis le Lot 1).
 
-Avant tout déploiement, si tu as un environnement Node quelque part : `npm run verify` doit
-passer (syntaxe + tests). Sinon, teste directement sur Render après déploiement.
+Avant tout déploiement : `npm run verify` doit passer (syntaxe, lint, format, tests contre une
+base PostgreSQL — locale ou via Docker).
 
 ## Sécurité applicative (Lot 4)
 
@@ -170,14 +170,15 @@ passer (syntaxe + tests). Sinon, teste directement sur Render après déploiemen
   (création de recette), déconnexion (session locale redevient anonyme).
 - **Non fait dans ce lot** : Playwright/tests end-to-end navigateur (nécessite un environnement
   Node + navigateurs installés pour s'exécuter, indisponible ici — les tests d'intégration
-  `node:test` couvrent déjà l'essentiel du parcours API), environnement de *staging* dédié
+  `node:test` couvrent déjà l'essentiel du parcours API), environnement de _staging_ dédié
   (nécessiterait un second service Render).
-- **Point d'attention pour le premier passage en CI** : aucun de ces outils n'a pu être
-  exécuté dans cet environnement (pas de Node.js disponible ici). Il est possible que
-  `npm run lint` ou `npm run format:check` remontent des signalements sur du code jamais
-  passé à travers ces outils. C'est normal et attendu à l'adoption — corrige au fil de l'eau,
-  ou lance `npm run format` une fois pour tout reformater d'un coup (à committer séparément
-  pour garder un historique lisible).
+- **Premier passage effectif en CI (Lot 1)** : `ci.yml`/`dependabot.yml` avaient été committés
+  hors de `.github/` (uploadés par erreur à la racine du dépôt) — la CI n'avait donc, en
+  réalité, jamais tourné une seule fois avant le Lot 1. Une fois corrigé et Node.js disponible
+  pour vérifier, `npm run lint` a effectivement remonté deux `no-undef` préexistants (`URL`
+  manquant dans les globals du service worker, `fetch` manquant dans ceux des fichiers
+  serveur/tests) et l'ensemble du dépôt n'était jamais passé par Prettier — corrigés dans la
+  foulée (globals ESLint complétées, `npm run format` lancé une fois sur tout le dépôt).
 
 ## Architecture (Lot 5)
 
@@ -206,10 +207,10 @@ server.js           composition root : assemble middlewares globaux + routers, ~
 ```
 
 **Pas de couche "repository"** séparée au-dessus de `db.js` (au-delà de ce que le brief
-appelle repositories) : better-sqlite3 est déjà une API synchrone simple (prepared
-statements), directement lisible dans chaque route/service. Ajouter une abstraction
-supplémentaire aurait multiplié le risque de bug dans cet environnement où rien ne peut être
-exécuté pour vérifier, sans bénéfice clair vu la taille du projet.
+appelle repositories) : `db.js` expose une API minimale (`get`/`all`/`run`/`transaction`)
+directement au-dessus de PostgreSQL (`pg`), lisible telle quelle dans chaque route/service.
+Ajouter une abstraction supplémentaire aurait multiplié le risque de bug sans bénéfice clair
+vu la taille du projet.
 
 **Vérification faite pour cette refonte** (à défaut de pouvoir exécuter quoi que ce soit) :
 inventaire complet des 35 routes de l'ancien `server.js` comparé une à une aux routeurs
@@ -221,6 +222,44 @@ en Express (traité dans l'ordre d'enregistrement) et une inversion aurait pu ou
 silencieusement. Les tests existants (`test/api.test.js`, `test/gamification.test.js`) ne
 requièrent que `../server` et `../db`, tous deux inchangés dans leur contrat public — aucune
 modification de test nécessaire pour cette refonte.
+
+## Base de données PostgreSQL (Lot 1)
+
+- **Pourquoi** : sur le plan gratuit de Render, aucun disque n'est persistant — à chaque
+  redémarrage du service (déploiement, veille après inactivité, crash), le fichier SQLite
+  repartait de zéro et `bootstrap.js` réinjectait les données de démo. Résultat concret :
+  les recettes (et leurs photos, stockées en base64 dans la même base) ajoutées par de vrais
+  utilisateurs disparaissaient au redémarrage suivant. PostgreSQL, hébergé séparément, résout
+  ça — la base survit aux redémarrages du service web.
+- **`db.js`** expose désormais une API asynchrone minimale (`get`/`all`/`run`/`transaction`)
+  au-dessus de `pg`, au lieu de l'API synchrone de better-sqlite3. Le schéma (tables, index)
+  est identique fonctionnellement, avec les équivalents PostgreSQL attendus (`SERIAL` au lieu
+  d'`AUTOINCREMENT`, `TIMESTAMPTZ` au lieu de `TEXT`/`datetime('now')`, `ON CONFLICT DO
+NOTHING` au lieu de `INSERT OR IGNORE`...).
+- **Propagation async** : PostgreSQL via `pg` est asynchrone (contrairement à better-sqlite3),
+  donc toute la chaîne d'appel jusqu'aux routes est passée en `async`/`await` — `gamification.js`,
+  les `services/*.js`, et chaque handler de route (enveloppé dans `asyncHandler`, voir
+  `middleware/errors.js`, pour convertir un rejet de promesse en erreur 500 propre plutôt qu'un
+  crash du process, Express 4 ne le faisant pas nativement).
+- **Déploiement** : `render.yaml` provisionne la base via un bloc `databases:` et injecte
+  `DATABASE_URL` automatiquement au service (voir section Déploiement plus haut). Aucune
+  migration de données nécessaire au premier déploiement — la base SQLite de production était
+  déjà réinitialisée à chaque redémarrage (c'est le bug corrigé ici), donc rien de réel à
+  transférer ; `bootstrap.js` repeuple la nouvelle base avec les mêmes données de démonstration.
+- **Tests** : `test/api.test.js` et `test/gamification.test.js` tournent maintenant contre une
+  vraie base PostgreSQL jetable (plus de `DB_PATH=':memory:'` propre à SQLite) — voir le
+  service `postgres` ajouté dans `.github/workflows/ci.yml`. Deux ajustements nécessaires,
+  invisibles avec l'isolation par défaut de SQLite `:memory:` : les fichiers de test tournent
+  maintenant en série (`--test-concurrency=1` dans `package.json`) — en parallèle, sur une base
+  partagée entre fichiers (contrairement à `:memory:`, isolée par processus), une écriture de
+  `gamification.test.js` pouvait s'intercaler avant la vérification "base vide ?" du seed de
+  démo dans `api.test.js` et l'empêcher silencieusement de se déclencher ; et `registerLimiter`
+  (anti-abus par IP, `middleware/rateLimit.js`) est relevé en environnement de test — la suite
+  crée des dizaines de comptes depuis la même IP locale dans un seul run, largement au-delà de
+  la limite de production (inchangée).
+- **Non fait dans ce lot** : système de migrations versionnées (dossier `db/migrations/`) —
+  le schéma reste appliqué au démarrage via `CREATE TABLE IF NOT EXISTS`/`ADD COLUMN IF NOT
+EXISTS`, idempotent et suffisant tant qu'une seule instance du service tourne à la fois.
 
 ## Design / UX produit (Lot 6)
 
@@ -296,36 +335,36 @@ modification de test nécessaire pour cette refonte.
 ## Statut des lots (brief de mise en production)
 
 - [x] **Lot 0 — Débloquer le déploiement** : `JWT_SECRET` obligatoire en prod, écoute sur
-  `process.env.PORT`, `/health` + `/health/ready`, `npm ci` dans `render.yaml`,
-  `.env.example`, script `verify`.
-- [ ] **Lot 1 — PostgreSQL + migrations versionnées** (reporté à la fin du projet, décision
-  produit) : nécessite une base Postgres provisionnée (Render Postgres / Supabase / Neon) et
-  son `DATABASE_URL`.
+      `process.env.PORT`, `/health` + `/health/ready`, `npm ci` dans `render.yaml`,
+      `.env.example`, script `verify`.
+- [x] **Lot 1 — PostgreSQL** : migration complète de better-sqlite3 vers PostgreSQL (`pg`),
+      voir détail ci-dessus. Reste : système de migrations versionnées (`db/migrations/`), pas
+      nécessaire tant qu'une seule instance applique le schéma au démarrage.
 - [ ] **Lot 2 — Upload médias externe** : nécessite un compte Cloudinary (ou équivalent) et
-  ses clés API.
+      ses clés API.
 - [ ] **Lot 3 — Email réel + sessions invalidables** : nécessite un compte Resend (ou
-  équivalent) et sa clé API. (Le relèvement du mot de passe à 10 caractères, prévu dans ce
-  lot, a été fait en avance avec la validation Zod du Lot 4.)
+      équivalent) et sa clé API. (Le relèvement du mot de passe à 10 caractères, prévu dans ce
+      lot, a été fait en avance avec la validation Zod du Lot 4.)
 - [x] **Lot 4 — Sécurité applicative + modération/confidentialité** : Helmet/CSP, CSRF,
-  validation Zod, anti-abus étendu, signalement/blocage/admin/suppression de
-  compte/export/pages légales. Restent : CAPTCHA, Redis (voir détail ci-dessus).
+      validation Zod, anti-abus étendu, signalement/blocage/admin/suppression de
+      compte/export/pages légales. Restent : CAPTCHA, Redis (voir détail ci-dessus).
 - [x] **Lot 8 — Fonctionnalités produit** : macros/coût, ingrédients structurés, portions
-  ajustables, liste de courses, brouillons, filtres. Reste : collections nommées.
+      ajustables, liste de courses, brouillons, filtres. Reste : collections nommées.
 - [x] **Lot 9 — Gamification saine** : voir détail ci-dessus.
 - [x] **Lot 10 — Qualité/CI** : ESLint, Prettier, EditorConfig, GitHub Actions, Dependabot,
-  tests étendus (voir détail ci-dessus). Reste : Playwright/E2E, staging dédié.
+      tests étendus (voir détail ci-dessus). Reste : Playwright/E2E, staging dédié.
 - [x] **Lot 5 — Refonte architecture** : `server.js` découpé en `config/middleware/services/
-  schemas/routes` (voir détail ci-dessus), aucun changement de comportement.
+schemas/routes` (voir détail ci-dessus), aucun changement de comportement.
 - [x] **Lot 6 — Design/UX produit** : voir détail ci-dessus.
 - [x] **Lot 7 — PWA hors-ligne** : mise à jour explicite du service worker (voir détail
-  ci-dessus). Reste : icônes PNG 192/512 (nécessite un outil de rendu d'image, indisponible ici).
+      ci-dessus). Reste : icônes PNG 192/512 (nécessite un outil de rendu d'image, indisponible ici).
 - [x] **Lot 11 — SEO** : liens de recette partageables, méta-tags dynamiques, sitemap/robots.txt,
-  titres de page (voir détail ci-dessus). Reste : analytics (compteur de vues).
+      titres de page (voir détail ci-dessus). Reste : analytics (compteur de vues).
 
 Tous les lots du brief sont maintenant traités, sauf ceux qui nécessitent un compte externe
-(Lot 1 — PostgreSQL, reporté par choix produit ; Lot 2 — upload médias ; Lot 3 — email réel) et
-les quelques items listés "Reste" ci-dessus dans chaque lot. Chaque lot a été livré avec son
-code, ses tests et une note de déploiement dédiée — voir le détail complet plus haut.
+(Lot 2 — upload médias ; Lot 3 — email réel) et les quelques items listés "Reste" ci-dessus
+dans chaque lot. Chaque lot a été livré avec son code, ses tests et une note de déploiement
+dédiée — voir le détail complet plus haut.
 
 Chaque lot suivant sera livré avec son code, sa migration, ses tests et une note de
 déploiement dédiée — voir le brief pour le détail complet de chaque lot.
