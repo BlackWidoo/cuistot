@@ -84,12 +84,12 @@ async function seedData(db) {
     uid[u.username] = rows[0].id;
   }
 
-  // Photos : TheMealDB (déjà autorisé dans la CSP img-src) pour les recettes historiques.
-  // Les nouvelles recettes ci-dessous n'ont pas de photo assignée (pas d'accès réseau sortant
-  // depuis l'environnement où ce lot a été écrit pour vérifier de nouvelles URLs d'images
-  // réelles sans risquer des liens cassés) : elles s'appuient sur l'illustration SVG + le
-  // dégradé de catégorie, déjà le rendu par défaut pour toute recette sans photo. Si de
-  // vraies photos sont ajoutées plus tard, il suffit de renseigner `photo` sur chaque entrée.
+  // Photos : TheMealDB pour les recettes historiques, Wikimedia Commons (via l'API REST
+  // Wikipedia, chaque URL vérifiée) pour les nouvelles — les deux domaines sont autorisés dans
+  // la CSP img-src (middleware/security.js). "Curry vegan de courge" n'a pas de photo assignée :
+  // aucune image libre de droit trouvée qui corresponde (viande sur les résultats "curry"
+  // génériques, inapproprié pour une recette végane) — reste sur l'illustration SVG + le
+  // dégradé de catégorie, le rendu par défaut pour toute recette sans photo.
   const P = 'https://www.themealdb.com/images/media/meals/';
   const recipes = [
     {
@@ -268,6 +268,8 @@ async function seedData(db) {
       prep: 150,
       servings: 6,
       image: 'pot',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Tajine-marocain-un-plat-varie-et-sain_%28cropped%29.jpg/330px-Tajine-marocain-un-plat-varie-et-sain_%28cropped%29.jpg',
       desc: 'Sucré-salé, épicé en douceur : le tajine du dimanche qui parfume toute la maison.',
       ingredients: [
         { qty: 800, unit: 'g', label: "épaule d'agneau" },
@@ -296,6 +298,8 @@ async function seedData(db) {
       prep: 90,
       servings: 8,
       image: 'croissant',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Home_made_sour_dough_bread.jpg/330px-Home_made_sour_dough_bread.jpg',
       desc: 'Croûte craquante, mie alvéolée : le vrai pain, celui qui demande un peu de patience.',
       ingredients: [
         { qty: 500, unit: 'g', label: 'farine de blé T65' },
@@ -320,6 +324,8 @@ async function seedData(db) {
       prep: 60,
       servings: 6,
       image: 'pan',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/01_Paella_Valenciana_original.jpg/330px-01_Paella_Valenciana_original.jpg',
       desc: 'La vraie paella, celle qui se partage au centre de la table, à même le plat.',
       ingredients: [
         { qty: 400, unit: 'g', label: 'riz rond' },
@@ -345,6 +351,8 @@ async function seedData(db) {
       prep: 35,
       servings: 4,
       image: 'bowl',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Patatas_bravas_madrid.jpg/330px-Patatas_bravas_madrid.jpg',
       desc: "Pommes de terre croustillantes, sauce piquante généreuse. L'apéro qui ne fait pas semblant.",
       ingredients: [
         { qty: 800, unit: 'g', label: 'pommes de terre' },
@@ -369,6 +377,8 @@ async function seedData(db) {
       prep: 40,
       servings: 4,
       image: 'bowl',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Sushi_platter.jpg/330px-Sushi_platter.jpg',
       desc: 'Frais, croquant, parfait pour se lancer dans les makis faits maison.',
       ingredients: [
         { qty: 300, unit: 'g', label: 'riz à sushi' },
@@ -393,6 +403,8 @@ async function seedData(db) {
       prep: 120,
       servings: 2,
       image: 'bowl',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Shoyu_Ramen%EF%BC%88Tokyo_Ramen%EF%BC%89_-_01.jpg/330px-Shoyu_Ramen%EF%BC%88Tokyo_Ramen%EF%BC%89_-_01.jpg',
       desc: 'Bouillon riche et parfumé, œuf mollet, le réconfort version japonaise.',
       ingredients: [
         { qty: 1.5, unit: 'L', label: 'bouillon de volaille' },
@@ -422,6 +434,8 @@ async function seedData(db) {
       prep: 90,
       servings: 8,
       image: 'cake',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Entremets_simples.jpg/330px-Entremets_simples.jpg',
       desc: 'Biscuit moelleux, crémeux pistache, insert framboise : la pâtisserie du dimanche qui impressionne.',
       ingredients: [
         { qty: 250, unit: 'g', label: 'framboises' },
@@ -447,6 +461,8 @@ async function seedData(db) {
       prep: 70,
       servings: 8,
       image: 'cake',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Theres_always_room_for_pie_%287859650026%29.jpg/330px-Theres_always_room_for_pie_%287859650026%29.jpg',
       desc: 'Acidulée sous une meringue légère et dorée : un classique qui ne déçoit jamais.',
       ingredients: [
         { qty: 1, unit: '', label: 'pâte sablée' },
@@ -500,6 +516,8 @@ async function seedData(db) {
       prep: 35,
       servings: 4,
       image: 'burger',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/%D7%94%D7%9E%D7%91%D7%95%D7%A8%D7%92%D7%A8_%D7%98%D7%91%D7%A2%D7%95%D7%A0%D7%99.jpg/330px-%D7%94%D7%9E%D7%91%D7%95%D7%A8%D7%92%D7%A8_%D7%98%D7%91%D7%A2%D7%95%D7%A0%D7%99.jpg',
       desc: "Un steak végétal qui tient vraiment en bouche, entre le fumé et l'épicé.",
       ingredients: [
         { qty: 400, unit: 'g', label: 'haricots noirs cuits' },
@@ -526,6 +544,8 @@ async function seedData(db) {
       prep: 10,
       servings: 1,
       image: 'drink',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Kiwi_Smoothie.jpg/330px-Kiwi_Smoothie.jpg',
       desc: 'Frais et vitaminé, prêt en 10 minutes pour bien commencer la journée.',
       ingredients: [
         { qty: 1, unit: '', label: 'mangue congelée' },
@@ -554,6 +574,8 @@ async function seedData(db) {
       prep: 15,
       servings: 4,
       image: 'bowl',
+      photo:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Lebanese_style_hummus.jpg/330px-Lebanese_style_hummus.jpg',
       desc: 'Onctueux et parfumé au tahini, prêt en 15 minutes sans cuisson.',
       ingredients: [
         { qty: 400, unit: 'g', label: 'pois chiches cuits' },
